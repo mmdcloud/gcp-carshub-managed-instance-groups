@@ -27,7 +27,7 @@ resource "google_compute_target_http_proxy" "carshub_cdn_target_proxy" {
 
 # GCP forwarding rule
 resource "google_compute_global_forwarding_rule" "carshub_cdn_global_forwarding_rule" {
-  name                  = "carshub_cdn-global-forwarding-rule"
+  name                  = "carshub-cdn-global-forwarding-rule"
   load_balancing_scheme = "EXTERNAL"
   ip_address            = google_compute_global_address.carshub_cdn_lb_global_address.address
   port_range            = "80"
@@ -124,7 +124,7 @@ resource "google_compute_backend_service" "carshub-frontend-service" {
   custom_response_headers = ["X-Cache-Hit: {cdn_cache_status}"]
   health_checks           = [google_compute_health_check.carshub_backend_health_check.id]
   backend {
-    group           = google_compute_instance_group_manager.carshub_backend_mig.instance_group
+    group           = google_compute_instance_group_manager.carshub_frontend_mig.instance_group
     balancing_mode  = "UTILIZATION"
     capacity_scaler = 1.0
   }

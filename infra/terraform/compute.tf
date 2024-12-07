@@ -12,33 +12,17 @@ resource "google_compute_instance_template" "carshub_backend_template" {
     }
   }
   disk {
-    source_image = "debian-cloud/debian-12"
+    source_image = "ubuntu-os-cloud/ubuntu-2204-lts"
     auto_delete  = true
     boot         = true
   }
 
-  metadata_startup_script = 
+  metadata_startup_script = base64encode(templatefile("${path.module}/scripts/user_data_backend.sh", {
+    DB_PATH  = "${google_sql_database_instance.carshub_db_instance.first_ip_address}"
+    USERNAME = "admin"
+    PASSWORD = "${google_secret_manager_secret_version.carshub_db_secret_version_data.secret_data}"
+  }))
 
-  # install nginx and nodejs with application
-  metadata = {
-    startup-script = <<-EOF1
-        #!/bin/bash
-	sudo apt-get update
-	sudo apt-get install -y nginx
-	sudo apt update
-	curl -sL https://deb.nodesource.com/setup_18.x -o nodesource_setup.sh
-	sudo bash nodesource_setup.sh
-	sudo apt install nodejs -y
-	cd /home/deapoolandwolverine
-	git clone https://github.com/mmdcloud/gcp-autoscaling-with-managed-instance-groups
-	cd gcp-autoscaling-with-managed-instance-groups
-	sudo cp scripts/nodejs_nginx.config /etc/nginx/sites-available/default
-	sudo service nginx restart
-	sudo npm i
-	sudo npm i -g pm2
-	pm2 start server.mjs
-    EOF1
-  }
   lifecycle {
     create_before_destroy = true
   }
@@ -67,31 +51,16 @@ resource "google_compute_instance_template" "carshub_frontend_template" {
     }
   }
   disk {
-    source_image = "debian-cloud/debian-12"
+    source_image = "ubuntu-os-cloud/ubuntu-2204-lts"
     auto_delete  = true
     boot         = true
   }
 
-  # install nginx and nodejs with application
-  metadata = {
-    startup-script = <<-EOF1
-        #!/bin/bash
-	sudo apt-get update
-	sudo apt-get install -y nginx
-	sudo apt update
-	curl -sL https://deb.nodesource.com/setup_18.x -o nodesource_setup.sh
-	sudo bash nodesource_setup.sh
-	sudo apt install nodejs -y
-	cd /home/deapoolandwolverine
-	git clone https://github.com/mmdcloud/gcp-autoscaling-with-managed-instance-groups
-	cd gcp-autoscaling-with-managed-instance-groups
-	sudo cp scripts/nodejs_nginx.config /etc/nginx/sites-available/default
-	sudo service nginx restart
-	sudo npm i
-	sudo npm i -g pm2
-	pm2 start server.mjs
-    EOF1
-  }
+  metadata_startup_script = base64encode(templatefile("${path.module}/scripts/user_data_frontend.sh", {
+    BASE_URL = "${google_compute_global_address.carshub_backend_lb_global_address.address}"
+    CDN_URL  = "${google_compute_global_address.carshub_cdn_lb_global_address.address}"
+  }))
+
   lifecycle {
     create_before_destroy = true
   }

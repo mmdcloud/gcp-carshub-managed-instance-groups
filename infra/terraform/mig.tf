@@ -1,6 +1,6 @@
 # Backend MIG
 resource "google_compute_instance_group_manager" "carshub_backend_mig" {
-  name = "l7-xlb-mig1"
+  name = "carshub-backend-mig"
   zone = "us-central1-c"
   named_port {
     name = "http"
@@ -16,7 +16,7 @@ resource "google_compute_instance_group_manager" "carshub_backend_mig" {
 
 # Frontend MIG
 resource "google_compute_instance_group_manager" "carshub_frontend_mig" {
-  name = "l7-xlb-mig1"
+  name = "carshub-frontend-mig"
   zone = "us-central1-c"
   named_port {
     name = "http"
