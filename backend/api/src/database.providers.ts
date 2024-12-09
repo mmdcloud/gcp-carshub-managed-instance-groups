@@ -17,8 +17,8 @@ export const databaseProviders = [
                 dialect: 'mysql',
                 host: process.env.DB_PATH,
                 port: 3306,
-                username: process.env.USERNAME,
-                password: process.env.PASSWORD,
+                username: process.env.UN,
+                password: process.env.CREDS,
                 database: 'carshub',
             });
             sequelize.addModels([

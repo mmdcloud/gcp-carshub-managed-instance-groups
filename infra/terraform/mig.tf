@@ -1,7 +1,7 @@
 # Backend MIG
 resource "google_compute_instance_group_manager" "carshub_backend_mig" {
   name = "carshub-backend-mig"
-  zone = "us-central1-c"
+  zone = "${var.location}-c"
   named_port {
     name = "http"
     port = 3000
@@ -17,7 +17,7 @@ resource "google_compute_instance_group_manager" "carshub_backend_mig" {
 # Frontend MIG
 resource "google_compute_instance_group_manager" "carshub_frontend_mig" {
   name = "carshub-frontend-mig"
-  zone = "us-central1-c"
+  zone = "${var.location}-c"
   named_port {
     name = "http"
     port = 3000

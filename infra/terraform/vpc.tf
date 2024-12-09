@@ -8,7 +8,7 @@ resource "google_compute_network" "carshub_vpc" {
 resource "google_compute_subnetwork" "carshub_subnet" {
   name          = "carshub-subnet"
   ip_cidr_range = "10.0.1.0/24"
-  region        = "us-central1"
+  region        = var.location
   network       = google_compute_network.carshub_vpc.id
 }
 

@@ -12,7 +12,7 @@ sudo npm i -g pm2
 # Installing Nest CLI
 sudo npm install -g @nestjs/cli
 cd /home/ubuntu
-mkdir nodeapp
+sudo mkdir nodeapp
 # Checking out from Version Control
 git clone https://github.com/mmdcloud/carshub-gcp-managed-instance-groups
 cd carshub-gcp-managed-instance-groups/backend/api
