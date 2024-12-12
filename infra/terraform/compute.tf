@@ -12,8 +12,7 @@ resource "google_compute_instance_template" "carshub_backend_template" {
     }
   }
   disk {
-    # source_image = "ubuntu-os-cloud/ubuntu-2204-lts"
-    source_image = "debian-cloud/debian-12"
+    source_image = "ubuntu-os-cloud/ubuntu-2204-lts"
     auto_delete  = true
     boot         = true
   }
@@ -33,13 +32,12 @@ apt install nodejs -y
 npm i -g pm2
 # Installing Nest CLI
 npm install -g @nestjs/cli
-cd /root
 mkdir nodeapp
 # Checking out from Version Control
 git clone https://github.com/mmdcloud/carshub-gcp-managed-instance-groups
 cd carshub-gcp-managed-instance-groups/backend/api
-cp -r . /root/nodeapp/
-cd /root/nodeapp/
+cp -r . ../nodeapp/
+cd ../nodeapp/
 # Copying Nginx config
 cp scripts/default /etc/nginx/sites-available/
 # Installing dependencies
@@ -92,8 +90,7 @@ resource "google_compute_instance_template" "carshub_frontend_template" {
     }
   }
   disk {
-    # source_image = "ubuntu-os-cloud/ubuntu-2204-lts"
-    source_image = "debian-cloud/debian-12"
+    source_image = "ubuntu-os-cloud/ubuntu-2204-lts"
     auto_delete  = true
     boot         = true
   }
@@ -112,13 +109,12 @@ apt install nodejs -y
 # Installing PM2
 npm i -g pm2
 
-cd /root
 mkdir nodeapp
 # Checking out from Version Control
 git clone https://github.com/mmdcloud/carshub-gcp-managed-instance-groups
 cd carshub-gcp-managed-instance-groups/frontend
-cp -r . /root/nodeapp/
-cd /root/nodeapp/
+cp -r . ../nodeapp/
+cd ../nodeapp/
 
 cat > .env <<EOL
 CDN_URL="${google_compute_global_address.carshub_cdn_lb_global_address.address}"

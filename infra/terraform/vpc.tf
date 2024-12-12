@@ -26,5 +26,5 @@ resource "google_compute_firewall" "carshub_firewall" {
     protocol = "tcp"
     ports    = ["22"]
   }
-  target_tags = ["carshub-backend-health-check","carshub-frontend-health-check"]
+  target_tags = ["carshub-backend-health-check", "carshub-frontend-health-check"]
 }
