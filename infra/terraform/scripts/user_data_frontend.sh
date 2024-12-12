@@ -1,14 +1,14 @@
-#!/bin/bash
-sudo apt-get update -y
-sudo apt-get upgrade -y
+#! /bin/bash
+apt-get update -y
+apt-get upgrade -y
 # Installing Nginx
-sudo apt-get install -y nginx
+apt-get install -y nginx
 # Installing Node.js
 curl -sL https://deb.nodesource.com/setup_20.x -o nodesource_setup.sh
-sudo bash nodesource_setup.sh
-sudo apt install nodejs -y
+bash nodesource_setup.sh
+apt install nodejs -y
 # Installing PM2
-sudo npm i -g pm2
+npm i -g pm2
 
 cd /home/susmitashiyekar
 mkdir nodeapp
@@ -19,18 +19,18 @@ cp -r . /home/susmitashiyekar/nodeapp/
 cd /home/susmitashiyekar/nodeapp/
 
 # Setting up env variables
-cat > .env << EOL
-BASE_URL=${BASE_URL}
-CDN_URL=${CDN_URL}
+cat > .env <<EOL
+CDN_URL=$1
+BASE_URL=$2
 EOL
 
 # Copying Nginx config
 cp scripts/default /etc/nginx/sites-available/
 # Installing dependencies
-sudo npm i
+npm i
 
 # Building the project
-sudo npm run build
+npm run build
 # Starting PM2 app
 pm2 start ecosystem.config.js
-sudo service nginx restart
+service nginx restart
