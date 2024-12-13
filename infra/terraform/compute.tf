@@ -94,37 +94,45 @@ resource "google_compute_instance_template" "carshub_frontend_template" {
 #! /bin/bash
 apt-get update -y
 apt-get upgrade -y
-# Installing Nginx
-apt-get install -y nginx
 # Installing Node.js
 curl -sL https://deb.nodesource.com/setup_20.x -o nodesource_setup.sh
 bash nodesource_setup.sh
 apt install nodejs -y
-# Installing PM2
-npm i -g pm2
+apt-get install -yq ca-certificates git build-essential supervisor
 
-mkdir nodeapp
 # Checking out from Version Control
-git clone https://github.com/mmdcloud/carshub-gcp-managed-instance-groups
-cd carshub-gcp-managed-instance-groups/frontend
-cp -r . ../../nodeapp/
-cd ../../nodeapp/
+git clone https://github.com/mmdcloud/carshub-gcp-managed-instance-groups  /opt/app/new-repo
+cd /opt/app/new-repo/frontend
 
 cat > .env <<EOL
 CDN_URL="${google_compute_global_address.carshub_cdn_lb_global_address.address}"
 BASE_URL="${google_compute_global_address.carshub_backend_lb_global_address.address}"
 EOL
 
-# Copying Nginx config
-cp scripts/default /etc/nginx/sites-available/
 # Installing dependencies
 npm i
 
 # Building the project
 npm run build
-# Starting PM2 app
-pm2 start ecosystem.config.js
-service nginx restart
+
+useradd -m -d /home/nodeapp nodeapp
+chown -R nodeapp:nodeapp /opt/app
+
+# Configure supervisor to run the node app.
+cat >/etc/supervisor/conf.d/node-app.conf << EOF
+[program:nodeapp]
+directory=/opt/app/new-repo/frontend
+command=npm start
+autostart=true
+autorestart=true
+user=nodeapp
+environment=HOME="/home/nodeapp",USER="nodeapp",NODE_ENV="production"
+stdout_logfile=syslog
+stderr_logfile=syslog
+EOF
+
+supervisorctl reread
+supervisorctl update
     EOT
   }
 
