@@ -107,8 +107,8 @@ mkdir nodeapp
 # Checking out from Version Control
 git clone https://github.com/mmdcloud/carshub-gcp-managed-instance-groups
 cd carshub-gcp-managed-instance-groups/frontend
-cp -r . ../nodeapp/
-cd ../nodeapp/
+cp -r . ../../nodeapp/
+cd ../../nodeapp/
 
 cat > .env <<EOL
 CDN_URL="${google_compute_global_address.carshub_cdn_lb_global_address.address}"
