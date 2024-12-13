@@ -122,7 +122,7 @@ resource "google_compute_backend_service" "carshub-frontend-service" {
   enable_cdn              = true
   custom_request_headers  = ["X-Client-Geo-Location: {client_region_subdivision}, {client_city}"]
   custom_response_headers = ["X-Cache-Hit: {cdn_cache_status}"]
-  health_checks           = [google_compute_health_check.carshub_backend_health_check.id]
+  health_checks           = [google_compute_health_check.carshub-frontend-health-check.id]
   backend {
     group           = google_compute_instance_group_manager.carshub_frontend_mig.instance_group
     balancing_mode  = "UTILIZATION"

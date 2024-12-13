@@ -11,7 +11,7 @@ resource "google_compute_instance_group_manager" "carshub_backend_mig" {
     name              = "primary"
   }
   base_instance_name = "vm"
-  target_size        = 2
+  target_size        = 1
 }
 
 # Frontend MIG
@@ -27,5 +27,5 @@ resource "google_compute_instance_group_manager" "carshub_frontend_mig" {
     name              = "primary"
   }
   base_instance_name = "vm"
-  target_size        = 2
+  target_size        = 1
 }

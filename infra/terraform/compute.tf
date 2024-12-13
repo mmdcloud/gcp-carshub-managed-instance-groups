@@ -56,12 +56,6 @@ service nginx restart
     EOT
   }
 
-  # metadata_startup_script = base64encode(templatefile("${path.module}/scripts/user_data_backend.sh", {
-  #   DB_PATH  = "35.23.54.26"
-  #   USERNAME = "admin"
-  #   PASSWORD = "${google_secret_manager_secret_version.carshub_db_secret_version_data.secret_data}"
-  # }))
-
   lifecycle {
     create_before_destroy = true
   }
@@ -133,10 +127,6 @@ pm2 start ecosystem.config.js
 service nginx restart
     EOT
   }
-  # metadata_startup_script = base64encode(templatefile("${path.module}/scripts/user_data_frontend.sh", {
-  #   BASE_URL = "${google_compute_global_address.carshub_backend_lb_global_address.address}"
-  #   CDN_URL  = "${google_compute_global_address.carshub_cdn_lb_global_address.address}"
-  # }))
 
   lifecycle {
     create_before_destroy = true
