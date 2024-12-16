@@ -94,6 +94,7 @@ resource "google_compute_instance_template" "carshub_frontend_template" {
 #! /bin/bash
 apt-get update -y
 apt-get upgrade -y
+apt-get install -y nginx
 # Installing Node.js
 curl -sL https://deb.nodesource.com/setup_20.x -o nodesource_setup.sh
 bash nodesource_setup.sh
@@ -103,7 +104,7 @@ apt-get install -yq ca-certificates git build-essential supervisor
 # Checking out from Version Control
 git clone https://github.com/mmdcloud/carshub-gcp-managed-instance-groups  /opt/app/new-repo
 cd /opt/app/new-repo/frontend
-
+cp scripts/default /etc/nginx/sites-available/
 cat > .env <<EOL
 CDN_URL="${google_compute_global_address.carshub_cdn_lb_global_address.address}"
 BASE_URL="${google_compute_global_address.carshub_backend_lb_global_address.address}"
@@ -130,7 +131,8 @@ environment=HOME="/home/nodeapp",USER="nodeapp",NODE_ENV="production"
 stdout_logfile=syslog
 stderr_logfile=syslog
 EOF
-
+service nginx reload
+service nginx restart
 supervisorctl reread
 supervisorctl update
     EOT

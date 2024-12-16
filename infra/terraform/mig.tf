@@ -8,7 +8,7 @@ resource "google_compute_instance_group_manager" "carshub_backend_mig" {
   }
   version {
     instance_template = google_compute_instance_template.carshub_backend_template.id
-    name              = "primary"
+    name              = "backend"
   }
   base_instance_name = "vm"
   target_size        = 1
@@ -24,7 +24,7 @@ resource "google_compute_instance_group_manager" "carshub_frontend_mig" {
   }
   version {
     instance_template = google_compute_instance_template.carshub_frontend_template.id
-    name              = "primary"
+    name              = "frontend"
   }
   base_instance_name = "vm"
   target_size        = 1
