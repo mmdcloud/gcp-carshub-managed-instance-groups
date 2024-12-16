@@ -16,7 +16,7 @@ resource "google_compute_instance_template" "carshub_backend_template" {
     auto_delete  = true
     boot         = true
   }
-
+  # ${google_sql_database_instance.carshub_db_instance.ip_address[0].ip_address}
   metadata = {
     startup-script = <<-EOT
 #! /bin/bash
@@ -44,7 +44,7 @@ cp scripts/default /etc/nginx/sites-available/
 npm i
 
 cat > .env <<EOL
-DB_PATH="${google_sql_database_instance.carshub_db_instance.ip_address[0].ip_address}"
+DB_PATH=""
 UN="mohit"
 CREDS="${google_secret_manager_secret_version.carshub_db_secret_version_data.secret_data}"
 EOL
