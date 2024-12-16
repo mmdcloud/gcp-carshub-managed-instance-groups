@@ -20,7 +20,7 @@ resource "google_compute_instance_group_manager" "carshub_frontend_mig" {
   zone = "${var.location}-c"
   named_port {
     name = "carshub-frontend-named-port"
-    port = 80
+    port = 3000
   }
   version {
     instance_template = google_compute_instance_template.carshub_frontend_template.id

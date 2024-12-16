@@ -16,7 +16,7 @@ resource "google_compute_instance_template" "carshub_backend_template" {
     auto_delete  = true
     boot         = true
   }
-  # ${google_sql_database_instance.carshub_db_instance.ip_address[0].ip_address}
+  # 
   metadata = {
     startup-script = <<-EOT
 #! /bin/bash
@@ -44,7 +44,7 @@ cp scripts/default /etc/nginx/sites-available/
 npm i
 
 cat > .env <<EOL
-DB_PATH=""
+DB_PATH="${google_sql_database_instance.carshub_db_instance.ip_address[0].ip_address}"
 UN="mohit"
 CREDS="${google_secret_manager_secret_version.carshub_db_secret_version_data.secret_data}"
 EOL
@@ -145,8 +145,12 @@ service nginx restart
 
 # Frontend health check
 resource "google_compute_health_check" "carshub-frontend-health-check" {
-  name = "carshub-frontend-health-check"
-  http_health_check {
-    port_specification = "USE_SERVING_PORT"
+  name                = "carshub-frontend-health-check"
+  check_interval_sec  = 20
+  timeout_sec         = 20
+  unhealthy_threshold = 6
+  tcp_health_check {
+    port      = 3000
+    port_name = "carshub-frontend-named-port"
   }
 }
