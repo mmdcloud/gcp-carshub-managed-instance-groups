@@ -131,10 +131,10 @@ environment=HOME="/home/nodeapp",USER="nodeapp",NODE_ENV="production"
 stdout_logfile=syslog
 stderr_logfile=syslog
 EOF
-service nginx reload
-service nginx restart
 supervisorctl reread
 supervisorctl update
+service nginx reload
+service nginx restart
     EOT
   }
 
