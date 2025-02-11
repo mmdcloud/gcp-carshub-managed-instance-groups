@@ -1,0 +1,10 @@
+variable "name" {}
+variable "location" {}
+variable "db_name" {}
+variable "db_version" {}
+variable "tier" {}
+variable "db_user" {}
+variable "password" {}
+variable "vpc_id" {}
+variable "vpc_self_link" {}
+variable "ipv4_enabled" {}

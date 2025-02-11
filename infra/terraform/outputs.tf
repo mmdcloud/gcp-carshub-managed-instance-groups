@@ -1,7 +1,7 @@
 output "frontend_url" {
-  value = google_compute_global_address.carshub_frontend_lb_global_address.address
+  value = module.frontend_lb.address
 }
 
 output "backend_url" {
-  value = google_compute_global_address.carshub_backend_lb_global_address.address
+  value = module.backend_lb.address
 }
