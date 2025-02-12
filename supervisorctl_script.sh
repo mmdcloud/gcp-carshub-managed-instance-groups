@@ -14,8 +14,8 @@ git clone https://github.com/mmdcloud/carshub-gcp-managed-instance-groups  /opt/
 cd /opt/app/new-repo/frontend
 cp scripts/default /etc/nginx/sites-available/
 cat > .env <<EOL
-CDN_URL="${module.cdn_lb.address}"
 BASE_URL="${module.backend_lb.address}"
+CDN_URL="${module.cdn_lb.address}"
 EOL
 
 # Installing dependencies

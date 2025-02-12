@@ -10,13 +10,13 @@ apt install nodejs -y
 # Installing PM2
 npm i -g pm2
 
-cd /home/susmitashiyekar
+cd /home/milinddixit1967_gmail_com
 mkdir nodeapp
 # Checking out from Version Control
 git clone https://github.com/mmdcloud/carshub-gcp-managed-instance-groups
 cd carshub-gcp-managed-instance-groups/frontend
-cp -r . /home/susmitashiyekar/nodeapp/
-cd /home/susmitashiyekar/nodeapp/
+cp -r . /home/milinddixit1967_gmail_com/nodeapp/
+cd /home/milinddixit1967_gmail_com/nodeapp/
 
 # Setting up env variables
 cat > .env <<EOL

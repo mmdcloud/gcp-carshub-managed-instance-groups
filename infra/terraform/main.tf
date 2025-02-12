@@ -88,25 +88,30 @@ bash nodesource_setup.sh
 apt install nodejs -y
 # Installing PM2
 npm i -g pm2
+
+cd /home/milinddixit1967_gmail_com
 mkdir nodeapp
 # Checking out from Version Control
 git clone https://github.com/mmdcloud/carshub-gcp-managed-instance-groups
 cd carshub-gcp-managed-instance-groups/frontend
-cp -r . ../nodeapp/
-cd ../nodeapp/
+cp -r . /home/milinddixit1967_gmail_com/nodeapp/
+cd /home/milinddixit1967_gmail_com/nodeapp/
+
+# Setting up env variables
+cat > .env <<EOL
+BASE_URL="${module.backend_lb.address}"
+CDN_URL="${module.cdn_lb.address}"
+EOL
+
 # Copying Nginx config
 cp scripts/default /etc/nginx/sites-available/
 # Installing dependencies
 npm i
 
-cat > .env <<EOL
-CDN_URL="${module.cdn_lb.address}"
-BASE_URL="${module.backend_lb.address}"
-EOL
 # Building the project
 npm run build
 # Starting PM2 app
-pm2 start "npm start" --name frontend
+pm2 start ecosystem.config.js
 service nginx restart
     EOT
   port_specification = var.port_specification
