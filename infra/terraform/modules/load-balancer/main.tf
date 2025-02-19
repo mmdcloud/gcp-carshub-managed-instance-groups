@@ -1,7 +1,7 @@
 # Reserve an external IP for CDN
 resource "google_compute_global_address" "global_address" {
   name         = var.global_address_name
-  address_type = var.global_address_type
+  address_type = var.global_address_type  
 }
 
 # GCP URL MAP

@@ -2,6 +2,13 @@ resource "google_compute_instance_template" "instance_template" {
   name         = var.template_name
   machine_type = var.machine_type
   tags         = [var.health_check_name]
+  # dynamic "service_account" {
+  #   for_each = var.service_account
+  #   content {
+  #     email = service_account.value["email"]
+  #     scopes = service_account.value["scopes"]
+  #   }
+  # }
   scheduling {
     automatic_restart   = true
     on_host_maintenance = "MIGRATE"
@@ -24,12 +31,14 @@ resource "google_compute_instance_template" "instance_template" {
   lifecycle {
     create_before_destroy = true
   }
+  
 }
 
 # health check
 resource "google_compute_health_check" "health_check" {
   name = var.health_check_name
   http_health_check {
+    request_path = var.request_path
     port_specification = var.port_specification
   }
 }

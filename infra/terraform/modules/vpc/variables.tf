@@ -12,6 +12,7 @@ variable "firewall_data" {
     firewall_name      = string
     firewall_direction = string
     target_tags        = list(string)
+    source_tags      = list(string)
     source_ranges      = list(string)
     allow_list = list(object({
       protocol = string

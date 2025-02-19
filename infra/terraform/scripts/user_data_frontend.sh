@@ -1,36 +1,34 @@
-#! /bin/bash
-apt-get update -y
-apt-get upgrade -y
+#!/bin/bash
+sudo apt-get update -y
+sudo apt-get upgrade -y
 # Installing Nginx
-apt-get install -y nginx
+sudo apt-get install -y nginx
 # Installing Node.js
 curl -sL https://deb.nodesource.com/setup_20.x -o nodesource_setup.sh
-bash nodesource_setup.sh
-apt install nodejs -y
+sudo bash nodesource_setup.sh
+sudo apt install nodejs -y
 # Installing PM2
-npm i -g pm2
+sudo npm i -g pm2
 
-cd /home/milinddixit1967_gmail_com
+cd /home/ubuntu
 mkdir nodeapp
 # Checking out from Version Control
 git clone https://github.com/mmdcloud/carshub-gcp-managed-instance-groups
 cd carshub-gcp-managed-instance-groups/frontend
-cp -r . /home/milinddixit1967_gmail_com/nodeapp/
-cd /home/milinddixit1967_gmail_com/nodeapp/
-
+cp -r . /home/ubuntu/nodeapp/
+cd /home/ubuntu/nodeapp/
 # Setting up env variables
 cat > .env <<EOL
-CDN_URL=$1
-BASE_URL=$2
+BASE_URL=${BASE_URL}
+CDN_URL=${CDN_URL}
 EOL
-
 # Copying Nginx config
 cp scripts/default /etc/nginx/sites-available/
 # Installing dependencies
-npm i
+sudo npm i
 
 # Building the project
-npm run build
+sudo npm run build
 # Starting PM2 app
 pm2 start ecosystem.config.js
-service nginx restart
+sudo service nginx restart

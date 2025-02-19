@@ -19,7 +19,8 @@ resource "google_compute_firewall" "carshub_firewall" {
   name          = element(var.firewall_data[*].firewall_name, count.index)
   direction     = element(var.firewall_data[*].firewall_direction, count.index)
   network       = google_compute_network.vpc.id
-  source_ranges = element(var.firewall_data[*].source_ranges, count.index)
+  source_tags = var.firewall_data[*].source_tags == [] ? null :  element(var.firewall_data[*].source_tags, count.index)
+  source_ranges = var.firewall_data[*].source_ranges == [] ? null :  element(var.firewall_data[*].source_ranges, count.index)
   dynamic "allow" {
     # for_each = var.firewall_data[*].allow_list
     for_each = flatten([for data in var.firewall_data : data.allow_list])

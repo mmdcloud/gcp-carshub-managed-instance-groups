@@ -43,13 +43,18 @@ module "carshub_vpc" {
       firewall_name      = "carshub-firewall"
       firewall_direction = "INGRESS"
       source_ranges      = ["0.0.0.0/0"]
+      source_tags        = []
       target_tags        = [var.frontend_health_check, var.backend_health_check]
     }
   ]
   subnets = [
     {
-      name          = "carshub-subnet"
+      name          = "carshub-subnet-frontend"
       ip_cidr_range = "10.0.1.0/24"
+    },
+    {
+      name          = "carshub-subnet-backend"
+      ip_cidr_range = "10.0.2.0/24"
     }
   ]
 }
@@ -65,104 +70,58 @@ module "carshub_connector" {
   machine_type  = "f1-micro"
 }
 
-
 # Instance templates
 module "carshub_frontend_instance_template" {
-  source             = "./modules/compute"
-  auto_delete        = var.ubuntu_auto_delete
-  boot               = var.ubuntu_boot
-  source_image       = var.ubuntu_source_os_image
-  template_name      = var.frontend_template_name
-  machine_type       = var.ubuntu_machine_type
-  network            = module.carshub_vpc.vpc_id
-  subnetwork         = module.carshub_vpc.subnet_info[0].id
-  startup_script     = <<-EOT
-#!/bin/bash
-sudo apt-get update -y
-sudo apt-get upgrade -y
-# Installing Nginx
-sudo apt-get install -y nginx
-# Installing Node.js
-curl -sL https://deb.nodesource.com/setup_20.x -o nodesource_setup.sh
-sudo bash nodesource_setup.sh
-sudo apt install nodejs -y
-# Installing PM2
-sudo npm i -g pm2
-
-cd /home/ubuntu
-mkdir nodeapp
-# Checking out from Version Control
-git clone https://github.com/mmdcloud/carshub-gcp-managed-instance-groups
-cd carshub-gcp-managed-instance-groups/frontend
-cp -r . /home/ubuntu/nodeapp/
-cd /home/ubuntu/nodeapp/
-# Setting up env variables
-cat > .env <<EOL
-BASE_URL="${module.backend_lb.address}"
-CDN_URL="${module.cdn_lb.address}"
-EOL
-# Copying Nginx config
-cp scripts/default /etc/nginx/sites-available/
-# Installing dependencies
-sudo npm i
-
-# Building the project
-sudo npm run build
-# Starting PM2 app
-pm2 start ecosystem.config.js
-sudo service nginx restart
-    EOT
+  source        = "./modules/compute"
+  auto_delete   = var.ubuntu_auto_delete
+  boot          = var.ubuntu_boot
+  source_image  = var.ubuntu_source_os_image
+  template_name = var.frontend_template_name
+  # service_account = [
+  #   {
+  #     email = module.carshub_vm_storage_account.sa_email,
+  #     scopes = [
+  #       "storage-rw"
+  #     ]
+  #   }
+  # ]
+  machine_type = var.ubuntu_machine_type
+  network      = module.carshub_vpc.vpc_id
+  subnetwork   = module.carshub_vpc.subnet_info[0].id
+  startup_script = templatefile("${path.module}/scripts/user_data_frontend.sh", {
+    BASE_URL = module.backend_lb.address
+    CDN_URL  = module.cdn_lb.address
+  })
   port_specification = var.port_specification
+  request_path       = "/auth/signin"
   health_check_name  = var.frontend_health_check
 }
 
 module "carshub_backend_instance_template" {
-  source             = "./modules/compute"
-  auto_delete        = var.ubuntu_auto_delete
-  boot               = var.ubuntu_boot
-  source_image       = var.ubuntu_source_os_image
-  template_name      = var.backend_template_name
+  source        = "./modules/compute"
+  auto_delete   = var.ubuntu_auto_delete
+  boot          = var.ubuntu_boot
+  source_image  = var.ubuntu_source_os_image
+  template_name = var.backend_template_name
+  # service_account = [
+  #   {
+  #     email = module.carshub_vm_storage_account.sa_email,
+  #     scopes = [
+  #       "storage-rw"
+  #     ]
+  #   }
+  # ]
   machine_type       = var.ubuntu_machine_type
   network            = module.carshub_vpc.vpc_id
-  subnetwork         = module.carshub_vpc.subnet_info[0].id
+  subnetwork         = module.carshub_vpc.subnet_info[1].id
   port_specification = var.port_specification
   health_check_name  = var.backend_health_check
-  startup_script     = <<-EOT
-#! /bin/bash
-apt-get update -y
-apt-get upgrade -y
-# Installing Nginx
-apt-get install -y nginx
-# Installing Node.js
-curl -sL https://deb.nodesource.com/setup_20.x -o nodesource_setup.sh
-bash nodesource_setup.sh
-apt install nodejs -y
-# Installing PM2
-npm i -g pm2
-# Installing Nest CLI
-npm install -g @nestjs/cli
-mkdir nodeapp
-# Checking out from Version Control
-git clone https://github.com/mmdcloud/carshub-gcp-managed-instance-groups
-cd carshub-gcp-managed-instance-groups/backend/api
-cp -r . ../nodeapp/
-cd ../nodeapp/
-# Copying Nginx config
-cp scripts/default /etc/nginx/sites-available/
-# Installing dependencies
-npm i
-
-cat > .env <<EOL
-DB_PATH="${module.carshub_db.db_ip_address}"
-UN="mohit"
-CREDS="${module.carshub_sql_password_secret.secret_data}"
-EOL
-# Building the project
-npm run build
-# Starting PM2 app
-pm2 start dist/main.js
-service nginx restart
-    EOT
+  request_path       = "/"
+  startup_script = templatefile("${path.module}/scripts/user_data_backend.sh", {
+    DB_PATH = module.carshub_db.db_ip_address
+    CREDS   = module.carshub_sql_password_secret.secret_data
+    UN      = "mohit"
+  })
 }
 
 # Managed Instane Groups
@@ -258,12 +217,39 @@ module "backend_lb_service" {
   health_checks           = [module.carshub_backend_instance_template.health_check_id]
 }
 
-
 # GCS
 module "carshub_media_bucket" {
   source   = "./modules/gcs"
   location = var.location
   name     = "carshub-media"
+  cors = [
+    {
+      origin          = [module.frontend_lb.address]
+      max_age_seconds = 3600
+      method          = ["GET", "POST", "PUT", "DELETE"]
+      response_header = ["*"]
+    }
+  ]
+  contents = [
+    {
+      name        = "images/"
+      content     = " "
+      source_path = ""
+    },
+    {
+      name        = "documents/"
+      content     = " "
+      source_path = ""
+    }
+  ]
+  force_destroy               = true
+  uniform_bucket_level_access = true
+}
+
+module "carshub_media_bucket_backup" {
+  source   = "./modules/gcs"
+  location = var.location
+  name     = "carshub-media-backup"
   cors = [
     {
       origin          = [module.frontend_lb.address]
@@ -324,14 +310,29 @@ module "carshub_sql_password_secret" {
 
 # Cloud SQL
 module "carshub_db" {
-  source        = "./modules/cloud-sql"
-  name          = "carshub-db-instance"
-  db_name       = "carshub"
-  db_user       = "mohit"
-  db_version    = "MYSQL_8_0"
-  location      = var.location
-  tier          = "db-f1-micro"
-  ipv4_enabled  = false
+  source                      = "./modules/cloud-sql"
+  name                        = "carshub-db-instance"
+  db_name                     = "carshub"
+  db_user                     = "mohit"
+  db_version                  = "MYSQL_8_0"
+  location                    = var.location
+  tier                        = "db-f1-micro"
+  ipv4_enabled                = false
+  deletion_protection_enabled = false
+  backup_configuration = [
+    {
+      enabled                        = true
+      start_time                     = "03:00"
+      location                       = var.location
+      point_in_time_recovery_enabled = false
+      backup_retention_settings = [
+        {
+          retained_backups = 7
+          retention_unit   = "COUNT"
+        }
+      ]
+    }
+  ]
   vpc_self_link = module.carshub_vpc.self_link
   vpc_id        = module.carshub_vpc.vpc_id
   password      = module.carshub_sql_password_secret.secret_data
@@ -366,6 +367,13 @@ module "carshub_service_account" {
   source       = "./modules/service-account"
   account_id   = "carshub-service-account"
   display_name = "CarsHub Service Account"
+  project_id   = data.google_project.project.project_id
+  permissions = [
+    "roles/run.invoker",
+    "roles/eventarc.eventReceiver",
+    "roles/cloudsql.client",
+    "roles/artifactregistry.reader"
+  ]
 }
 
 # Service Account Permissions
@@ -374,61 +382,6 @@ module "carshub_gcs_account_pubsub_publishing" {
   project = data.google_project.project.project_id
   role    = "roles/pubsub.publisher"
   member  = "serviceAccount:${data.google_storage_project_service_account.carshub_gcs_account.email_address}"
-}
-
-module "invoking_permission" {
-  source     = "./modules/service-account-iam"
-  project    = data.google_project.project.project_id
-  role       = "roles/run.invoker"
-  member     = "serviceAccount:${module.carshub_service_account.sa_email}"
-  depends_on = [module.carshub_gcs_account_pubsub_publishing]
-}
-
-module "storage_admin" {
-  source     = "./modules/service-account-iam"
-  project    = data.google_project.project.project_id
-  role       = "roles/storage.admin"
-  member     = "serviceAccount:${module.carshub_service_account.sa_email}"
-  depends_on = [module.carshub_gcs_account_pubsub_publishing]
-}
-
-module "event_receiving_permission" {
-  source     = "./modules/service-account-iam"
-  project    = data.google_project.project.project_id
-  role       = "roles/eventarc.eventReceiver"
-  member     = "serviceAccount:${module.carshub_service_account.sa_email}"
-  depends_on = [module.invoking_permission]
-}
-
-module "cloud_sql_access_permission" {
-  source  = "./modules/service-account-iam"
-  project = data.google_project.project.project_id
-  role    = "roles/cloudsql.client"
-  member  = "serviceAccount:${module.carshub_service_account.sa_email}"
-}
-
-module "artifactregistry_reader_permission" {
-  source     = "./modules/service-account-iam"
-  project    = data.google_project.project.project_id
-  role       = "roles/artifactregistry.reader"
-  member     = "serviceAccount:${module.carshub_service_account.sa_email}"
-  depends_on = [module.event_receiving_permission]
-}
-
-module "secret_manager_accessor" {
-  source     = "./modules/service-account-iam"
-  project    = data.google_project.project.project_id
-  role       = "roles/secretmanager.secretAccessor"
-  member     = "serviceAccount:${module.carshub_service_account.sa_email}"
-  depends_on = [module.event_receiving_permission]
-}
-
-module "service_account_token_creator" {
-  source     = "./modules/service-account-iam"
-  project    = data.google_project.project.project_id
-  role       = "roles/iam.serviceAccountTokenCreator"
-  member     = "serviceAccount:${module.carshub_service_account.sa_email}"
-  depends_on = [module.event_receiving_permission]
 }
 
 # Cloud Run Function
@@ -455,7 +408,7 @@ module "carshub_media_update_function" {
   all_traffic_on_latest_revision = true
   vpc_connector                  = module.carshub_connector.connector_id
   vpc_connector_egress_settings  = "ALL_TRAFFIC"
-  ingress_settings               = "ALLOW_ALL"
+  ingress_settings               = "ALLOW_INTERNAL_ONLY"
   sa                             = module.carshub_service_account.sa_email
   max_instance_count             = 3
   min_instance_count             = 1
@@ -474,9 +427,5 @@ module "carshub_media_update_function" {
       ]
     }
   ]
-  depends_on = [
-    module.event_receiving_permission,
-    module.artifactregistry_reader_permission,
-    module.cloud_sql_access_permission
-  ]
+  depends_on = [module.carshub_service_account]
 }

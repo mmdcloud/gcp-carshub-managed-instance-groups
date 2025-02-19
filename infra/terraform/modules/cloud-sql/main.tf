@@ -21,6 +21,23 @@ resource "google_sql_database_instance" "db_instance" {
   root_password    = var.password
   settings {
     tier = var.tier
+    deletion_protection_enabled = var.deletion_protection_enabled
+    dynamic "backup_configuration" {
+      for_each = var.backup_configuration
+      content {
+        enabled                        = backup_configuration.value["enabled"]
+        location                       = backup_configuration.value["location"]
+        start_time                     = backup_configuration.value["start_time"]
+        point_in_time_recovery_enabled = backup_configuration.value["point_in_time_recovery_enabled"]
+        dynamic "backup_retention_settings" {
+          for_each = backup_configuration.value["backup_retention_settings"]
+          content {
+            retained_backups = backup_retention_settings.value["retained_backups"]
+            retention_unit   = backup_retention_settings.value["retention_unit"]
+          }
+        }
+      }
+    }
     ip_configuration {
       ipv4_enabled = var.ipv4_enabled
       private_network = var.vpc_self_link
