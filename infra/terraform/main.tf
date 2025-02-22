@@ -47,6 +47,15 @@ module "carshub_vpc" {
       target_tags        = [var.frontend_health_check, var.backend_health_check]
     }
   ]
+  serverless_vpc_connectors = [
+    {
+      name          = "carshub-connector"
+      ip_cidr_range = "10.8.0.0/28"
+      min_instances = 2
+      max_instances = 5
+      machine_type  = "f1-micro"
+    }
+  ]
   subnets = [
     {
       name          = "carshub-subnet-frontend"
@@ -59,17 +68,6 @@ module "carshub_vpc" {
   ]
 }
 
-# Creating a Serverless VPC connector
-module "carshub_connector" {
-  source        = "./modules/serverless-vpc"
-  name          = "carshub-connector"
-  ip_cidr_range = "10.8.0.0/28"
-  network_name  = module.carshub_vpc.vpc_name
-  min_instances = 2
-  max_instances = 5
-  machine_type  = "f1-micro"
-}
-
 # Instance templates
 module "carshub_frontend_instance_template" {
   source        = "./modules/compute"
@@ -77,40 +75,31 @@ module "carshub_frontend_instance_template" {
   boot          = var.ubuntu_boot
   source_image  = var.ubuntu_source_os_image
   template_name = var.frontend_template_name
-  # service_account = [
-  #   {
-  #     email = module.carshub_vm_storage_account.sa_email,
-  #     scopes = [
-  #       "storage-rw"
-  #     ]
-  #   }
-  # ]
-  machine_type = var.ubuntu_machine_type
-  network      = module.carshub_vpc.vpc_id
-  subnetwork   = module.carshub_vpc.subnet_info[0].id
+  machine_type  = var.ubuntu_machine_type
+  network       = module.carshub_vpc.vpc_id
+  subnetwork    = module.carshub_vpc.subnet_info[0].id
   startup_script = templatefile("${path.module}/scripts/user_data_frontend.sh", {
     BASE_URL = module.backend_lb.address
-    CDN_URL  = module.cdn_lb.address
+    CDN_URL  = module.carshub_cdn.cdn_ip_address
   })
-  port_specification = var.port_specification
-  request_path       = "/auth/signin"
-  health_check_name  = var.frontend_health_check
+  port_specification     = var.port_specification
+  request_path           = "/auth/signin"
+  health_check_name      = var.frontend_health_check
+  location               = var.location
+  mig_base_instance_name = var.base_instance_name
+  instance_template_name = var.frontend_template_name
+  mig_named_port_name    = var.frontend_named_port_name
+  mig_named_port_port    = var.named_port_frontend
+  mig_name               = var.frontend_mig_name
+  mig_target_size        = var.target_size
 }
 
 module "carshub_backend_instance_template" {
-  source        = "./modules/compute"
-  auto_delete   = var.ubuntu_auto_delete
-  boot          = var.ubuntu_boot
-  source_image  = var.ubuntu_source_os_image
-  template_name = var.backend_template_name
-  # service_account = [
-  #   {
-  #     email = module.carshub_vm_storage_account.sa_email,
-  #     scopes = [
-  #       "storage-rw"
-  #     ]
-  #   }
-  # ]
+  source             = "./modules/compute"
+  auto_delete        = var.ubuntu_auto_delete
+  boot               = var.ubuntu_boot
+  source_image       = var.ubuntu_source_os_image
+  template_name      = var.backend_template_name
   machine_type       = var.ubuntu_machine_type
   network            = module.carshub_vpc.vpc_id
   subnetwork         = module.carshub_vpc.subnet_info[1].id
@@ -122,99 +111,69 @@ module "carshub_backend_instance_template" {
     CREDS   = module.carshub_sql_password_secret.secret_data
     UN      = "mohit"
   })
-}
-
-# Managed Instane Groups
-module "carshub_frontend_mig" {
-  source                 = "./modules/mig"
-  base_instance_name     = var.base_instance_name
-  instance_template      = module.carshub_frontend_instance_template.template_id
-  instance_template_name = var.frontend_template_name
-  named_port_name        = var.frontend_named_port_name
-  named_port_port        = var.named_port_frontend
-  mig_name               = var.frontend_mig_name
   location               = var.location
-  target_size            = var.target_size
-}
-
-module "carshub_backend_mig" {
-  source                 = "./modules/mig"
-  base_instance_name     = var.base_instance_name
-  instance_template      = module.carshub_backend_instance_template.template_id
+  mig_base_instance_name = var.base_instance_name
   instance_template_name = var.backend_template_name
-  named_port_name        = var.backend_named_port_name
-  named_port_port        = var.named_port_backend
+  mig_named_port_name    = var.backend_named_port_name
+  mig_named_port_port    = var.named_port_backend
   mig_name               = var.backend_mig_name
-  location               = var.location
-  target_size            = var.target_size
+  mig_target_size        = var.target_size
 }
 
 # Frontend Load Balancer
 module "frontend_lb" {
-  source                = "./modules/load-balancer"
-  forwarding_port_range = "80"
-  forwarding_rule_name  = "carshub-frontend-global-forwarding-rule"
-  forwarding_scheme     = "EXTERNAL"
-  global_address_type   = "EXTERNAL"
-  url_map_name          = "carshub-frontend-url-map"
-  global_address_name   = "carshub-frontend-lb-global-address"
-  target_proxy_name     = "carshub-frontend-target-proxy"
-  url_map_service       = module.frontend_lb_service.self_link
-}
-
-# Frontend Load Balancer Service
-module "frontend_lb_service" {
-  source     = "./modules/compute/backend"
-  name       = "carshub-frontend-service"
-  enable_cdn = true
-  port_name  = "carshub-frontend-port"
-  protocol   = "HTTP"
-  backends = [
+  source                                  = "./modules/load-balancer"
+  forwarding_port_range                   = "80"
+  forwarding_rule_name                    = "carshub-frontend-global-forwarding-rule"
+  forwarding_scheme                       = "EXTERNAL"
+  global_address_type                     = "EXTERNAL"
+  url_map_name                            = "carshub-frontend-url-map"
+  global_address_name                     = "carshub-frontend-lb-global-address"
+  target_proxy_name                       = "carshub-frontend-target-proxy"
+  backend_service_name                    = "carshub-frontend-service"
+  backend_service_enable_cdn              = true
+  backend_service_port_name               = "carshub-frontend-port"
+  backend_service_protocol                = "HTTP"
+  backend_service_timeout_sec             = 10
+  backend_service_load_balancing_scheme   = "EXTERNAL"
+  backend_service_custom_request_headers  = ["X-Client-Geo-Location: {client_region_subdivision}, {client_city}"]
+  backend_service_custom_response_headers = ["X-Cache-Hit: {cdn_cache_status}"]
+  backend_service_health_checks           = [module.carshub_frontend_instance_template.health_check_id]
+  backend_service_backends = [
     {
-      group           = "${module.carshub_frontend_mig.instance_group}"
+      group           = "${module.carshub_frontend_instance_template.instance_group}"
       balancing_mode  = "UTILIZATION"
       capacity_scaler = 1.0
     }
   ]
-  timeout_sec             = 10
-  load_balancing_scheme   = "EXTERNAL"
-  custom_request_headers  = ["X-Client-Geo-Location: {client_region_subdivision}, {client_city}"]
-  custom_response_headers = ["X-Cache-Hit: {cdn_cache_status}"]
-  health_checks           = [module.carshub_frontend_instance_template.health_check_id]
 }
 
 # Backend Load Balancer
 module "backend_lb" {
-  source                = "./modules/load-balancer"
-  forwarding_port_range = "80"
-  forwarding_rule_name  = "carshub-backend-global-forwarding-rule"
-  forwarding_scheme     = "EXTERNAL"
-  global_address_type   = "EXTERNAL"
-  url_map_name          = "carshub-backend-url-map"
-  global_address_name   = "carshub-backend-lb-global-address"
-  target_proxy_name     = "carshub-backend-target-proxy"
-  url_map_service       = module.backend_lb_service.self_link
-}
-
-# Backend Load Balancer Service
-module "backend_lb_service" {
-  source     = "./modules/compute/backend"
-  name       = "carshub-backend-service"
-  enable_cdn = true
-  port_name  = "carshub-backend-port"
-  protocol   = "HTTP"
-  backends = [
+  source                                  = "./modules/load-balancer"
+  forwarding_port_range                   = "80"
+  forwarding_rule_name                    = "carshub-backend-global-forwarding-rule"
+  forwarding_scheme                       = "EXTERNAL"
+  global_address_type                     = "EXTERNAL"
+  url_map_name                            = "carshub-backend-url-map"
+  global_address_name                     = "carshub-backend-lb-global-address"
+  target_proxy_name                       = "carshub-backend-target-proxy"
+  backend_service_name                    = "carshub-backend-service"
+  backend_service_enable_cdn              = true
+  backend_service_port_name               = "carshub-backend-port"
+  backend_service_protocol                = "HTTP"
+  backend_service_timeout_sec             = 10
+  backend_service_load_balancing_scheme   = "EXTERNAL"
+  backend_service_custom_request_headers  = ["X-Client-Geo-Location: {client_region_subdivision}, {client_city}"]
+  backend_service_custom_response_headers = ["X-Cache-Hit: {cdn_cache_status}"]
+  backend_service_health_checks           = [module.carshub_backend_instance_template.health_check_id]
+  backend_service_backends = [
     {
-      group           = "${module.carshub_backend_mig.instance_group}"
+      group           = "${module.carshub_backend_instance_template.instance_group}"
       balancing_mode  = "UTILIZATION"
       capacity_scaler = 1.0
     }
   ]
-  timeout_sec             = 10
-  load_balancing_scheme   = "EXTERNAL"
-  custom_request_headers  = ["X-Client-Geo-Location: {client_region_subdivision}, {client_city}"]
-  custom_response_headers = ["X-Cache-Hit: {cdn_cache_status}"]
-  health_checks           = [module.carshub_backend_instance_template.health_check_id]
 }
 
 # GCS
@@ -341,16 +300,11 @@ module "carshub_db" {
 
 # CDN for handling media files
 module "carshub_cdn" {
-  source      = "./modules/cdn"
-  bucket_name = module.carshub_media_bucket.bucket_name
-  enable_cdn  = true
-  description = "Content delivery network for media files"
-  name        = "carshub-media-cdn"
-}
-
-# Load Balancer
-module "cdn_lb" {
-  source                = "./modules/load-balancer"
+  source                = "./modules/cdn"
+  bucket_name           = module.carshub_media_bucket.bucket_name
+  enable_cdn            = true
+  description           = "Content delivery network for media files"
+  name                  = "carshub-media-cdn"
   forwarding_port_range = "80"
   forwarding_rule_name  = "carshub-cdn-global-forwarding-rule"
   forwarding_scheme     = "EXTERNAL"
@@ -358,12 +312,10 @@ module "cdn_lb" {
   url_map_name          = "carshub-cdn-compute-url-map"
   global_address_name   = "carshub-cdn-lb-global-address"
   target_proxy_name     = "carshub-cdn-target-proxy"
-  url_map_service       = module.carshub_cdn.cdn_self_link
-  depends_on            = [module.carshub_apis]
 }
 
 # Service Account
-module "carshub_service_account" {
+module "carshub_function_app_service_account" {
   source       = "./modules/service-account"
   account_id   = "carshub-service-account"
   display_name = "CarsHub Service Account"
@@ -386,18 +338,14 @@ module "carshub_gcs_account_pubsub_publishing" {
 
 # Cloud Run Function
 module "carshub_media_update_function" {
-  source               = "./modules/cloud-run-function"
-  function_name        = "carshub-media-function"
-  function_description = "A function to update media details in SQL database after the upload trigger"
-  handler              = "handler"
-  runtime              = "python312"
-  location             = var.location
-  storage_source = [
-    {
-      bucket = module.carshub_media_bucket_code.bucket_name
-      object = module.carshub_media_bucket_code.object_name[0].name
-    }
-  ]
+  source                       = "./modules/cloud-run-function"
+  function_name                = "carshub-media-function"
+  function_description         = "A function to update media details in SQL database after the upload trigger"
+  handler                      = "handler"
+  runtime                      = "python312"
+  location                     = var.location
+  storage_source_bucket        = module.carshub_media_bucket_code.bucket_name
+  storage_source_bucket_object = module.carshub_media_bucket_code.object_name[0].name
   build_env_variables = {
     INSTANCE_CONNECTION_NAME = "${data.google_project.project.project_id}:${var.location}:${module.carshub_db.db_name}"
     DB_USER                  = module.carshub_db.db_user
@@ -405,27 +353,23 @@ module "carshub_media_update_function" {
     DB_PASSWORD              = module.carshub_sql_password_secret.secret_data
     DB_PATH                  = module.carshub_db.db_ip_address
   }
-  all_traffic_on_latest_revision = true
-  vpc_connector                  = module.carshub_connector.connector_id
-  vpc_connector_egress_settings  = "ALL_TRAFFIC"
-  ingress_settings               = "ALLOW_INTERNAL_ONLY"
-  sa                             = module.carshub_service_account.sa_email
-  max_instance_count             = 3
-  min_instance_count             = 1
-  available_memory               = "256M"
-  timeout_seconds                = 60
-  event_triggers = [
+  all_traffic_on_latest_revision      = true
+  vpc_connector                       = module.carshub_vpc.vpc_connectors[0].id
+  vpc_connector_egress_settings       = "ALL_TRAFFIC"
+  ingress_settings                    = "ALLOW_INTERNAL_ONLY"
+  function_app_service_account_email  = module.carshub_function_app_service_account.sa_email
+  max_instance_count                  = 3
+  min_instance_count                  = 1
+  available_memory                    = "256M"
+  timeout_seconds                     = 60
+  event_trigger_event_type            = "google.cloud.storage.object.v1.finalized"
+  event_trigger_retry_policy          = "RETRY_POLICY_RETRY"
+  event_trigger_service_account_email = module.carshub_function_app_service_account.sa_email
+  event_filters = [
     {
-      event_type            = "google.cloud.storage.object.v1.finalized"
-      retry_policy          = "RETRY_POLICY_RETRY"
-      service_account_email = module.carshub_service_account.sa_email
-      event_filters = [
-        {
-          attribute = "bucket"
-          value     = module.carshub_media_bucket.bucket_name
-        }
-      ]
+      attribute = "bucket"
+      value     = module.carshub_media_bucket.bucket_name
     }
   ]
-  depends_on = [module.carshub_service_account]
+  depends_on = [module.carshub_function_app_service_account]
 }
