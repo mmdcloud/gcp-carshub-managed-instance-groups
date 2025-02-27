@@ -69,7 +69,7 @@ module "carshub_vpc" {
 }
 
 # Instance templates
-module "carshub_frontend_instance_template" {
+module "carshub_frontend_instance" {
   source        = "./modules/compute"
   auto_delete   = var.ubuntu_auto_delete
   boot          = var.ubuntu_boot
@@ -94,7 +94,7 @@ module "carshub_frontend_instance_template" {
   mig_target_size        = var.target_size
 }
 
-module "carshub_backend_instance_template" {
+module "carshub_backend_instance" {
   source             = "./modules/compute"
   auto_delete        = var.ubuntu_auto_delete
   boot               = var.ubuntu_boot
@@ -138,10 +138,10 @@ module "frontend_lb" {
   backend_service_load_balancing_scheme   = "EXTERNAL"
   backend_service_custom_request_headers  = ["X-Client-Geo-Location: {client_region_subdivision}, {client_city}"]
   backend_service_custom_response_headers = ["X-Cache-Hit: {cdn_cache_status}"]
-  backend_service_health_checks           = [module.carshub_frontend_instance_template.health_check_id]
+  backend_service_health_checks           = [module.carshub_frontend_instance.health_check_id]
   backend_service_backends = [
     {
-      group           = "${module.carshub_frontend_instance_template.instance_group}"
+      group           = "${module.carshub_frontend_instance.instance_group}"
       balancing_mode  = "UTILIZATION"
       capacity_scaler = 1.0
     }
@@ -166,10 +166,10 @@ module "backend_lb" {
   backend_service_load_balancing_scheme   = "EXTERNAL"
   backend_service_custom_request_headers  = ["X-Client-Geo-Location: {client_region_subdivision}, {client_city}"]
   backend_service_custom_response_headers = ["X-Cache-Hit: {cdn_cache_status}"]
-  backend_service_health_checks           = [module.carshub_backend_instance_template.health_check_id]
+  backend_service_health_checks           = [module.carshub_backend_instance.health_check_id]
   backend_service_backends = [
     {
-      group           = "${module.carshub_backend_instance_template.instance_group}"
+      group           = "${module.carshub_backend_instance.instance_group}"
       balancing_mode  = "UTILIZATION"
       capacity_scaler = 1.0
     }
@@ -324,7 +324,8 @@ module "carshub_function_app_service_account" {
     "roles/run.invoker",
     "roles/eventarc.eventReceiver",
     "roles/cloudsql.client",
-    "roles/artifactregistry.reader"
+    "roles/artifactregistry.reader",
+    "roles/secretmanager.admin"
   ]
 }
 
