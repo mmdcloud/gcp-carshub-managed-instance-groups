@@ -201,32 +201,30 @@ module "carshub_media_bucket" {
       source_path = ""
     }
   ]
-  force_destroy               = true
-  uniform_bucket_level_access = true
-}
-
-module "carshub_media_bucket_backup" {
-  source   = "./modules/gcs"
-  location = var.location
-  name     = "carshub-media-backup"
-  cors = [
+  versioning = true
+  lifecycle_rules = [
     {
-      origin          = [module.frontend_lb.address]
-      max_age_seconds = 3600
-      method          = ["GET", "POST", "PUT", "DELETE"]
-      response_header = ["*"]
-    }
-  ]
-  contents = [
-    {
-      name        = "images/"
-      content     = " "
-      source_path = ""
+      condition = {
+        age = 1
+      }
+      action = {
+        type          = "AbortIncompleteMultipartUpload"
+        storage_class = null
+      }
     },
     {
-      name        = "documents/"
-      content     = " "
-      source_path = ""
+      condition = {
+        age = 1095
+      }
+      action = {
+        storage_class = "ARCHIVE"
+        type          = "SetStorageClass"
+      }
+    }
+  ]
+  notifications = [
+    {
+      topic_id = module.carshub_media_bucket_pubsub.topic_id
     }
   ]
   force_destroy               = true
@@ -325,16 +323,22 @@ module "carshub_function_app_service_account" {
     "roles/eventarc.eventReceiver",
     "roles/cloudsql.client",
     "roles/artifactregistry.reader",
-    "roles/secretmanager.admin"
+    "roles/secretmanager.admin",
+    "roles/pubsub.admin"
   ]
 }
 
-# Service Account Permissions
-module "carshub_gcs_account_pubsub_publishing" {
-  source  = "./modules/service-account-iam"
-  project = data.google_project.project.project_id
+// Create a Pub/Sub topic.
+resource "google_pubsub_topic_iam_binding" "binding" {
+  topic   = module.carshub_media_bucket_pubsub.topic_id
   role    = "roles/pubsub.publisher"
-  member  = "serviceAccount:${data.google_storage_project_service_account.carshub_gcs_account.email_address}"
+  members = ["serviceAccount:${data.google_storage_project_service_account.carshub_gcs_account.email_address}"]
+}
+
+# Creating a Pub/Sub topic to send cloud storage events
+module "carshub_media_bucket_pubsub" {
+  source = "./modules/pubsub"
+  topic  = "carshub_media_bucket_events"
 }
 
 # Cloud Run Function
@@ -348,11 +352,10 @@ module "carshub_media_update_function" {
   storage_source_bucket        = module.carshub_media_bucket_code.bucket_name
   storage_source_bucket_object = module.carshub_media_bucket_code.object_name[0].name
   build_env_variables = {
-    INSTANCE_CONNECTION_NAME = "${data.google_project.project.project_id}:${var.location}:${module.carshub_db.db_name}"
-    DB_USER                  = module.carshub_db.db_user
-    DB_NAME                  = module.carshub_db.db_name
-    DB_PASSWORD              = module.carshub_sql_password_secret.secret_data
-    DB_PATH                  = module.carshub_db.db_ip_address
+    DB_USER     = module.carshub_db.db_user
+    DB_NAME     = module.carshub_db.db_name
+    SECRET_NAME = module.carshub_sql_password_secret.secret_name
+    DB_PATH     = module.carshub_db.db_ip_address
   }
   all_traffic_on_latest_revision      = true
   vpc_connector                       = module.carshub_vpc.vpc_connectors[0].id
@@ -363,14 +366,15 @@ module "carshub_media_update_function" {
   min_instance_count                  = 1
   available_memory                    = "256M"
   timeout_seconds                     = 60
-  event_trigger_event_type            = "google.cloud.storage.object.v1.finalized"
+  event_trigger_event_type            = "google.cloud.pubsub.topic.v1.messagePublished"
+  event_trigger_topic                 = module.carshub_media_bucket_pubsub.topic_id
   event_trigger_retry_policy          = "RETRY_POLICY_RETRY"
   event_trigger_service_account_email = module.carshub_function_app_service_account.sa_email
   event_filters = [
-    {
-      attribute = "bucket"
-      value     = module.carshub_media_bucket.bucket_name
-    }
+    # {
+    #   attribute = "bucket"
+    #   value     = module.carshub_media_bucket.bucket_name
+    # }
   ]
   depends_on = [module.carshub_function_app_service_account]
 }
