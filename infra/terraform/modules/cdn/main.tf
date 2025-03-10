@@ -3,7 +3,7 @@ resource "google_compute_backend_bucket" "cdn" {
   name        = var.name
   description = var.description
   bucket_name = var.bucket_name
-  enable_cdn  = var.enable_cdn
+  enable_cdn  = var.enable_cdn  
 }
 
 # Reserve an external IP for CDN
@@ -29,7 +29,7 @@ resource "google_compute_url_map" "cdn_url_map" {
 # GCP target proxy
 resource "google_compute_target_http_proxy" "cdn_target_http_proxy" {
   name    = var.target_proxy_name
-  url_map = google_compute_url_map.cdn_url_map.self_link
+  url_map = google_compute_url_map.cdn_url_map.self_link  
 }
 
 # GCP forwarding rule

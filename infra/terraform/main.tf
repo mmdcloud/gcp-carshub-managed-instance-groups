@@ -1,6 +1,11 @@
+# Registering vault provider
+data "vault_generic_secret" "sql" {
+  path = "secret/sql"
+}
+
 # Getting project information
 data "google_project" "project" {}
-data "google_storage_project_service_account" "carshub_gcs_account" {}
+data "google_storage_project_service_account" "carshub_gcs_account" {}  
 
 # Enable APIS
 module "carshub_apis" {
@@ -18,12 +23,34 @@ module "carshub_apis" {
   project_id         = data.google_project.project.project_id
 }
 
-# VPC Module
+# VPC Creation
 module "carshub_vpc" {
-  source                  = "./modules/vpc"
+  source                  = "./modules/network/vpc"
   auto_create_subnetworks = false
-  vpc_name                = var.vpc_name
-  location                = var.location
+  vpc_name                = "carshub-vpc"
+}
+
+# Subnets Creation
+module "carshub_subnets" {
+  source = "./modules/network/subnet"
+  subnets = [
+    {
+      name          = "carshub-subnet-frontend"
+      ip_cidr_range = "10.0.1.0/24"
+    },
+    {
+      name          = "carshub-subnet-backend"
+      ip_cidr_range = "10.0.2.0/24"
+    }
+  ]
+  vpc_id                   = module.carshub_vpc.vpc_id
+  private_ip_google_access = true
+  location                 = var.location
+}
+
+# Firewall Creation
+module "carshub_firewall" {
+  source = "./modules/network/firewall"
   firewall_data = [
     {
       allow_list = [
@@ -47,6 +74,13 @@ module "carshub_vpc" {
       target_tags        = [var.frontend_health_check, var.backend_health_check]
     }
   ]
+  vpc_id = module.carshub_vpc.vpc_id
+}
+
+# Serverless VPC Creation
+module "carshub_vpc_connectors" {
+  source   = "./modules/network/vpc-connector"
+  vpc_name = module.carshub_vpc.vpc_name
   serverless_vpc_connectors = [
     {
       name          = "carshub-connector"
@@ -54,16 +88,6 @@ module "carshub_vpc" {
       min_instances = 2
       max_instances = 5
       machine_type  = "f1-micro"
-    }
-  ]
-  subnets = [
-    {
-      name          = "carshub-subnet-frontend"
-      ip_cidr_range = "10.0.1.0/24"
-    },
-    {
-      name          = "carshub-subnet-backend"
-      ip_cidr_range = "10.0.2.0/24"
     }
   ]
 }
@@ -77,7 +101,7 @@ module "carshub_frontend_instance" {
   template_name = var.frontend_template_name
   machine_type  = var.ubuntu_machine_type
   network       = module.carshub_vpc.vpc_id
-  subnetwork    = module.carshub_vpc.subnet_info[0].id
+  subnetwork    = module.carshub_subnets.subnets[0].id
   startup_script = templatefile("${path.module}/scripts/user_data_frontend.sh", {
     BASE_URL = module.backend_lb.address
     CDN_URL  = module.carshub_cdn.cdn_ip_address
@@ -102,7 +126,7 @@ module "carshub_backend_instance" {
   template_name      = var.backend_template_name
   machine_type       = var.ubuntu_machine_type
   network            = module.carshub_vpc.vpc_id
-  subnetwork         = module.carshub_vpc.subnet_info[1].id
+  subnetwork         = module.carshub_subnets.subnets[1].id
   port_specification = var.port_specification
   health_check_name  = var.backend_health_check
   request_path       = "/"
@@ -131,7 +155,7 @@ module "frontend_lb" {
   global_address_name                     = "carshub-frontend-lb-global-address"
   target_proxy_name                       = "carshub-frontend-target-proxy"
   backend_service_name                    = "carshub-frontend-service"
-  backend_service_enable_cdn              = true
+  backend_service_enable_cdn              = false
   backend_service_port_name               = "carshub-frontend-port"
   backend_service_protocol                = "HTTP"
   backend_service_timeout_sec             = 10
@@ -159,7 +183,7 @@ module "backend_lb" {
   global_address_name                     = "carshub-backend-lb-global-address"
   target_proxy_name                       = "carshub-backend-target-proxy"
   backend_service_name                    = "carshub-backend-service"
-  backend_service_enable_cdn              = true
+  backend_service_enable_cdn              = false
   backend_service_port_name               = "carshub-backend-port"
   backend_service_protocol                = "HTTP"
   backend_service_timeout_sec             = 10
@@ -250,7 +274,7 @@ module "carshub_media_bucket_code" {
 # Cloud storage IAM binding
 resource "google_storage_bucket_iam_binding" "storage_iam_binding" {
   bucket = module.carshub_media_bucket.bucket_name
-  role   = "roles/storage.objectAdmin"
+  role   = "roles/storage.objectViewer"
 
   members = [
     "allUsers"
@@ -260,7 +284,7 @@ resource "google_storage_bucket_iam_binding" "storage_iam_binding" {
 # Secret Manager
 module "carshub_sql_password_secret" {
   source      = "./modules/secret-manager"
-  secret_data = var.sql_password_secret_data
+  secret_data = tostring(data.vault_generic_secret.sql.data["password"])
   secret_id   = var.sql_password_secret_id
   depends_on  = [module.carshub_apis]
 }
@@ -358,7 +382,7 @@ module "carshub_media_update_function" {
     DB_PATH     = module.carshub_db.db_ip_address
   }
   all_traffic_on_latest_revision      = true
-  vpc_connector                       = module.carshub_vpc.vpc_connectors[0].id
+  vpc_connector                       = module.carshub_vpc_connectors.vpc_connectors[0].id
   vpc_connector_egress_settings       = "ALL_TRAFFIC"
   ingress_settings                    = "ALLOW_INTERNAL_ONLY"
   function_app_service_account_email  = module.carshub_function_app_service_account.sa_email

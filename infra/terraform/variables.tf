@@ -101,10 +101,6 @@ variable "uniform_bucket_level_access" {
 }
 
 # Secret Manager
-variable "sql_password_secret_data" {
-  type    = string
-  default = "Mohitdixit12345!"
-}
 variable "sql_password_secret_id" {
   type    = string
   default = "carshub_db_password_secret"
