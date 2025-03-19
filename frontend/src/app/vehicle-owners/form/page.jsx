@@ -32,7 +32,7 @@ const VehicleOwnerForm = () => {
                     dob: values.dob,
                     gender: values.gender,
                     email: values.email,
-                    contact: values.contact,
+                    contact: values.contact
                 });
             }
         },
