@@ -32,14 +32,15 @@ const Upload = () => {
                 file: (payload.type == "Image" ? "images/" : "documents/") + payload.files[0].name,
                 type: payload.type,
                 description: payload.description,
-                inventoryId: params.id
+                inventoryId: params.id.toString(),
+                mime_type:payload.files[0].type
             });
             console.log(payload.type);
             console.log(payload.description);
             console.log(params.id);
             return axiosInstanceWithBlob.put(response.data.body, payload.files[0], {
                 headers: {
-                    'Content-Type': payload.files[0].type,
+                    'content-type': payload.files[0].type,
                     "x-amz-meta-typeofdocument": payload.type,
                     "x-amz-meta-descriptionofdocument": payload.description,
                     "x-amz-meta-inventoryid": params.id.toString(),

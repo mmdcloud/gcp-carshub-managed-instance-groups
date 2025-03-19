@@ -5,7 +5,7 @@ data "vault_generic_secret" "sql" {
 
 # Getting project information
 data "google_project" "project" {}
-data "google_storage_project_service_account" "carshub_gcs_account" {}  
+data "google_storage_project_service_account" "carshub_gcs_account" {}
 
 # Enable APIS
 module "carshub_apis" {
@@ -207,7 +207,7 @@ module "carshub_media_bucket" {
   name     = "carshub-media"
   cors = [
     {
-      origin          = [module.frontend_lb.address]
+      origin          = ["http://${module.frontend_lb.address}"]
       max_age_seconds = 3600
       method          = ["GET", "POST", "PUT", "DELETE"]
       response_header = ["*"]
