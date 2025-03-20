@@ -26,6 +26,7 @@ const CarouselComponent = ({ data }) => {
                                 <Image
                                     width={256}
                                     height={512}
+                                    unoptimized
                                     src={process.env.CDN_URL + "/" + x.path}
                                     alt="User"
                                     style={{
