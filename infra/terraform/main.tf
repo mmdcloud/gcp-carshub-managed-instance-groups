@@ -103,7 +103,7 @@ module "carshub_frontend_instance" {
   network       = module.carshub_vpc.vpc_id
   subnetwork    = module.carshub_subnets.subnets[0].id
   startup_script = templatefile("${path.module}/scripts/user_data_frontend.sh", {
-    BASE_URL = "http;//${module.backend_lb.address}"
+    BASE_URL = "http://${module.backend_lb.address}"
     CDN_URL  = module.carshub_cdn.cdn_ip_address
   })
   port_specification     = var.port_specification
