@@ -9,7 +9,7 @@ data "google_storage_project_service_account" "carshub_gcs_account" {}
 
 # Enable APIS
 module "carshub_apis" {
-  source = "./modules/apis"
+  source = "../../modules/apis"
   apis = [
     "compute.googleapis.com",
     "secretmanager.googleapis.com",
@@ -25,14 +25,14 @@ module "carshub_apis" {
 
 # VPC Creation
 module "carshub_vpc" {
-  source                  = "./modules/network/vpc"
+  source                  = "../../modules/network/vpc"
   auto_create_subnetworks = false
   vpc_name                = "carshub-vpc"
 }
 
 # Subnets Creation
 module "carshub_subnets" {
-  source = "./modules/network/subnet"
+  source = "../../modules/network/subnet"
   subnets = [
     {
       name          = "carshub-subnet-frontend"
@@ -50,7 +50,7 @@ module "carshub_subnets" {
 
 # Firewall Creation
 module "carshub_firewall" {
-  source = "./modules/network/firewall"
+  source = "../../modules/network/firewall"
   firewall_data = [
     {
       allow_list = [
@@ -79,7 +79,7 @@ module "carshub_firewall" {
 
 # Serverless VPC Creation
 module "carshub_vpc_connectors" {
-  source   = "./modules/network/vpc-connector"
+  source   = "../../modules/network/vpc-connector"
   vpc_name = module.carshub_vpc.vpc_name
   serverless_vpc_connectors = [
     {
@@ -94,7 +94,7 @@ module "carshub_vpc_connectors" {
 
 # Instance templates
 module "carshub_frontend_instance" {
-  source        = "./modules/compute"
+  source        = "../../modules/compute"
   auto_delete   = var.ubuntu_auto_delete
   boot          = var.ubuntu_boot
   source_image  = var.ubuntu_source_os_image
@@ -119,7 +119,7 @@ module "carshub_frontend_instance" {
 }
 
 module "carshub_backend_instance" {
-  source             = "./modules/compute"
+  source             = "../../modules/compute"
   auto_delete        = var.ubuntu_auto_delete
   boot               = var.ubuntu_boot
   source_image       = var.ubuntu_source_os_image
@@ -146,7 +146,7 @@ module "carshub_backend_instance" {
 
 # Frontend Load Balancer
 module "frontend_lb" {
-  source                                  = "./modules/load-balancer"
+  source                                  = "../../modules/load-balancer"
   forwarding_port_range                   = "80"
   forwarding_rule_name                    = "carshub-frontend-global-forwarding-rule"
   forwarding_scheme                       = "EXTERNAL"
@@ -174,7 +174,7 @@ module "frontend_lb" {
 
 # Backend Load Balancer
 module "backend_lb" {
-  source                                  = "./modules/load-balancer"
+  source                                  = "../../modules/load-balancer"
   forwarding_port_range                   = "80"
   forwarding_rule_name                    = "carshub-backend-global-forwarding-rule"
   forwarding_scheme                       = "EXTERNAL"
@@ -202,7 +202,7 @@ module "backend_lb" {
 
 # GCS
 module "carshub_media_bucket" {
-  source   = "./modules/gcs"
+  source   = "../../modules/gcs"
   location = var.location
   name     = "carshub-media"
   cors = [
@@ -256,7 +256,7 @@ module "carshub_media_bucket" {
 }
 
 module "carshub_media_bucket_code" {
-  source   = "./modules/gcs"
+  source   = "../../modules/gcs"
   location = var.location
   name     = "carshub-media-code"
   cors     = []
@@ -283,7 +283,7 @@ resource "google_storage_bucket_iam_binding" "storage_iam_binding" {
 
 # Secret Manager
 module "carshub_sql_password_secret" {
-  source      = "./modules/secret-manager"
+  source      = "../../modules/secret-manager"
   secret_data = tostring(data.vault_generic_secret.sql.data["password"])
   secret_id   = var.sql_password_secret_id
   depends_on  = [module.carshub_apis]
@@ -291,7 +291,7 @@ module "carshub_sql_password_secret" {
 
 # Cloud SQL
 module "carshub_db" {
-  source                      = "./modules/cloud-sql"
+  source                      = "../../modules/cloud-sql"
   name                        = "carshub-db-instance"
   db_name                     = "carshub"
   db_user                     = "mohit"
@@ -322,7 +322,7 @@ module "carshub_db" {
 
 # CDN for handling media files
 module "carshub_cdn" {
-  source                = "./modules/cdn"
+  source                = "../../modules/cdn"
   bucket_name           = module.carshub_media_bucket.bucket_name
   enable_cdn            = true
   description           = "Content delivery network for media files"
@@ -338,7 +338,7 @@ module "carshub_cdn" {
 
 # Service Account
 module "carshub_function_app_service_account" {
-  source       = "./modules/service-account"
+  source       = "../../modules/service-account"
   account_id   = "carshub-service-account"
   display_name = "CarsHub Service Account"
   project_id   = data.google_project.project.project_id
@@ -361,13 +361,13 @@ resource "google_pubsub_topic_iam_binding" "binding" {
 
 # Creating a Pub/Sub topic to send cloud storage events
 module "carshub_media_bucket_pubsub" {
-  source = "./modules/pubsub"
+  source = "../../modules/pubsub"
   topic  = "carshub_media_bucket_events"
 }
 
 # Cloud Run Function
 module "carshub_media_update_function" {
-  source                       = "./modules/cloud-run-function"
+  source                       = "../../modules/cloud-run-function"
   function_name                = "carshub-media-function"
   function_description         = "A function to update media details in SQL database after the upload trigger"
   handler                      = "handler"
