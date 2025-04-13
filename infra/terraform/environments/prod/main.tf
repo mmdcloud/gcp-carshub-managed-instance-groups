@@ -102,7 +102,7 @@ module "carshub_frontend_instance" {
   machine_type  = var.ubuntu_machine_type
   network       = module.carshub_vpc.vpc_id
   subnetwork    = module.carshub_subnets.subnets[0].id
-  startup_script = templatefile("${path.module}/scripts/user_data_frontend.sh", {
+  startup_script = templatefile("${path.module}/../../scripts/user_data_frontend.sh", {
     BASE_URL = "http://${module.backend_lb.address}"
     CDN_URL  = module.carshub_cdn.cdn_ip_address
   })
@@ -130,7 +130,7 @@ module "carshub_backend_instance" {
   port_specification = var.port_specification
   health_check_name  = var.backend_health_check
   request_path       = "/"
-  startup_script = templatefile("${path.module}/scripts/user_data_backend.sh", {
+  startup_script = templatefile("${path.module}/../../scripts/user_data_backend.sh", {
     DB_PATH = module.carshub_db.db_ip_address
     CREDS   = module.carshub_sql_password_secret.secret_data
     UN      = "mohit"
@@ -263,7 +263,7 @@ module "carshub_media_bucket_code" {
   contents = [
     {
       name        = "code.zip"
-      source_path = "${path.root}/files/code.zip"
+      source_path = "${path.root}/../../files/code.zip"
       content     = ""
     }
   ]
