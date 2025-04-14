@@ -31,18 +31,19 @@ module "carshub_vpc" {
 }
 
 # Subnets Creation
-module "carshub_subnets" {
-  source = "../../modules/network/subnet"
-  subnets = [
-    {
-      name          = "carshub-subnet-frontend"
-      ip_cidr_range = "10.0.1.0/24"
-    },
-    {
-      name          = "carshub-subnet-backend"
-      ip_cidr_range = "10.0.2.0/24"
-    }
-  ]
+module "carshub_public_subnets" {
+  source                   = "../../modules/network/subnet"
+  name                     = "carshub-public-subnet"
+  subnets                  = var.public_subnets
+  vpc_id                   = module.carshub_vpc.vpc_id
+  private_ip_google_access = false
+  location                 = var.location
+}
+
+module "carshub_private_subnets" {
+  source                   = "../../modules/network/subnet"
+  name                     = "carshub-private-subnet"
+  subnets                  = var.private_subnets
   vpc_id                   = module.carshub_vpc.vpc_id
   private_ip_google_access = true
   location                 = var.location
@@ -101,7 +102,7 @@ module "carshub_frontend_instance" {
   template_name = var.frontend_template_name
   machine_type  = var.ubuntu_machine_type
   network       = module.carshub_vpc.vpc_id
-  subnetwork    = module.carshub_subnets.subnets[0].id
+  subnetwork    = module.carshub_private_subnets.subnets[0].id
   startup_script = templatefile("${path.module}/../../scripts/user_data_frontend.sh", {
     BASE_URL = "http://${module.backend_lb.address}"
     CDN_URL  = module.carshub_cdn.cdn_ip_address
@@ -126,7 +127,7 @@ module "carshub_backend_instance" {
   template_name      = var.backend_template_name
   machine_type       = var.ubuntu_machine_type
   network            = module.carshub_vpc.vpc_id
-  subnetwork         = module.carshub_subnets.subnets[1].id
+  subnetwork         = module.carshub_private_subnets.subnets[1].id
   port_specification = var.port_specification
   health_check_name  = var.backend_health_check
   request_path       = "/"
