@@ -11,19 +11,19 @@ sudo apt install nodejs -y
 sudo npm i -g pm2
 
 cd /home/ubuntu
-mkdir nodeapp
+sudo mkdir nodeapp
 # Checking out from Version Control
-git clone https://github.com/mmdcloud/carshub-gcp-managed-instance-groups
+sudo git clone https://github.com/mmdcloud/carshub-gcp-managed-instance-groups
 cd carshub-gcp-managed-instance-groups/frontend
-cp -r . /home/ubuntu/nodeapp/
+sudo cp -r . /home/ubuntu/nodeapp/
 cd /home/ubuntu/nodeapp/
 # Setting up env variables
-cat > .env <<EOL
+sudo cat > .env <<EOL
 BASE_URL=${BASE_URL}
 CDN_URL=${CDN_URL}
 EOL
 # Copying Nginx config
-cp scripts/default /etc/nginx/sites-available/
+sudo cp scripts/default /etc/nginx/sites-available/
 # Installing dependencies
 sudo npm i
 
