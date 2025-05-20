@@ -87,10 +87,47 @@ module "carshub_vpc_connectors" {
       name          = "carshub-connector"
       ip_cidr_range = "10.8.0.0/28"
       min_instances = 2
-      max_instances = 5
+      max_instances = 10
       machine_type  = "f1-micro"
     }
   ]
+}
+
+
+# Cloud Armor WAF protection for Load Balancers
+module "cloud_armor" {
+  source  = "GoogleCloudPlatform/cloud-armor/google"
+  version = "~> 5.0"
+
+  project_id                           = var.project_id
+  name                                 = "test-casp-policy"
+  description                          = "Test Cloud Armor security policy with preconfigured rules, security rules and custom rules"
+  default_rule_action                  = "allow"
+  type                                 = "CLOUD_ARMOR"
+  layer_7_ddos_defense_enable          = true
+  layer_7_ddos_defense_rule_visibility = "STANDARD"
+  user_ip_request_headers              = ["True-Client-IP", ]
+
+  # preconfigured WAF rules
+  pre_configured_rules = {
+    "xss-stable_level_2_with_exclude" = {
+      action                  = "deny(502)"
+      priority                = 2
+      preview                 = true
+      target_rule_set         = "xss-v33-stable"
+      sensitivity_level       = 2
+      exclude_target_rule_ids = ["owasp-crs-v030301-id941380-xss", "owasp-crs-v030301-id941280-xss"]
+    }
+
+    "php-stable_level_0_with_include" = {
+      action                  = "deny(502)"
+      priority                = 3
+      description             = "PHP Sensitivity Level 0 with included rules"
+      target_rule_set         = "php-v33-stable"
+      include_target_rule_ids = ["owasp-crs-v030301-id933190-php", "owasp-crs-v030301-id933111-php"]
+    }
+
+  }
 }
 
 # Instance templates
@@ -164,6 +201,7 @@ module "frontend_lb" {
   backend_service_custom_request_headers  = ["X-Client-Geo-Location: {client_region_subdivision}, {client_city}"]
   backend_service_custom_response_headers = ["X-Cache-Hit: {cdn_cache_status}"]
   backend_service_health_checks           = [module.carshub_frontend_instance.health_check_id]
+  security_policy                         = module.cloud_armor.policy.id
   backend_service_backends = [
     {
       group           = "${module.carshub_frontend_instance.instance_group}"
@@ -192,6 +230,7 @@ module "backend_lb" {
   backend_service_custom_request_headers  = ["X-Client-Geo-Location: {client_region_subdivision}, {client_city}"]
   backend_service_custom_response_headers = ["X-Cache-Hit: {cdn_cache_status}"]
   backend_service_health_checks           = [module.carshub_backend_instance.health_check_id]
+  security_policy                         = module.cloud_armor.policy.id
   backend_service_backends = [
     {
       group           = "${module.carshub_backend_instance.instance_group}"
@@ -298,12 +337,18 @@ module "carshub_db" {
   db_user                     = "mohit"
   db_version                  = "MYSQL_8_0"
   location                    = var.location
-  tier                        = "db-f1-micro"
+  tier                        = "db-custom-4-15360"
+  availability_type           = "REGIONAL"
+  disk_size                   = 100 # GB
+  disk_type                   = "PD_SSD"
+  disk_autoresize             = true
+  disk_autoresize_limit       = 500 # GB
   ipv4_enabled                = false
   deletion_protection_enabled = false
   backup_configuration = [
     {
       enabled                        = true
+      binary_log_enabled             = true
       start_time                     = "03:00"
       location                       = var.location
       point_in_time_recovery_enabled = false
@@ -313,6 +358,16 @@ module "carshub_db" {
           retention_unit   = "COUNT"
         }
       ]
+    }
+  ]
+  database_flags = [
+    {
+      name  = "max_connections"
+      value = "1000"
+    },
+    {
+      name  = "skip_show_database"
+      value = "on"
     }
   ]
   vpc_self_link = module.carshub_vpc.self_link
@@ -395,11 +450,6 @@ module "carshub_media_update_function" {
   event_trigger_topic                 = module.carshub_media_bucket_pubsub.topic_id
   event_trigger_retry_policy          = "RETRY_POLICY_RETRY"
   event_trigger_service_account_email = module.carshub_function_app_service_account.sa_email
-  event_filters = [
-    # {
-    #   attribute = "bucket"
-    #   value     = module.carshub_media_bucket.bucket_name
-    # }
-  ]
-  depends_on = [module.carshub_function_app_service_account]
+  event_filters                       = []
+  depends_on                          = [module.carshub_function_app_service_account]
 }

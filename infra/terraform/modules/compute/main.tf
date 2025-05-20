@@ -51,3 +51,20 @@ resource "google_compute_instance_group_manager" "mig" {
   base_instance_name = var.mig_base_instance_name
   target_size        = var.mig_target_size
 }
+
+# Create a resource policy for scheduling
+# resource "google_compute_resource_policy" "compute_resource_policy" {
+#   name        = var.compute_policy_name
+#   region      = var.location
+#   description = var.compute_policy_description
+  
+#   instance_schedule_policy {
+#     vm_start_schedule {
+#       schedule = "0 8 * * *"
+#     }
+#     vm_stop_schedule {
+#       schedule = "0 18 * * *"
+#     }
+#     time_zone = "America/New_York"
+#   }
+# }

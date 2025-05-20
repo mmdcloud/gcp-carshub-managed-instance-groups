@@ -9,6 +9,7 @@ resource "google_compute_backend_service" "backend_service" {
   custom_request_headers  = var.backend_service_custom_request_headers
   custom_response_headers = var.backend_service_custom_response_headers
   health_checks           = var.backend_service_health_checks
+  security_policy         = var.security_policy
   dynamic "backend" {
     for_each = var.backend_service_backends
     content {

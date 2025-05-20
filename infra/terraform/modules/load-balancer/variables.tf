@@ -3,6 +3,10 @@ variable "global_address_type" {}
 variable "url_map_name" {}
 variable "forwarding_scheme" {}
 variable "forwarding_rule_name" {}
+variable "security_policy" {
+  type = string
+  default = null
+}
 variable "target_proxy_name" {}
 variable "url_map_service" {
     default = ""

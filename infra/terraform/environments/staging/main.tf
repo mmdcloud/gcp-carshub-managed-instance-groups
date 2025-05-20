@@ -300,25 +300,14 @@ module "carshub_db" {
   location                    = var.location
   tier                        = "db-f1-micro"
   ipv4_enabled                = false
+  availability_type           = "ZONAL"
+  disk_size                   = 10
   deletion_protection_enabled = false
-  backup_configuration = [
-    {
-      enabled                        = true
-      start_time                     = "03:00"
-      location                       = var.location
-      point_in_time_recovery_enabled = false
-      backup_retention_settings = [
-        {
-          retained_backups = 7
-          retention_unit   = "COUNT"
-        }
-      ]
-    }
-  ]
-  vpc_self_link = module.carshub_vpc.self_link
-  vpc_id        = module.carshub_vpc.vpc_id
-  password      = module.carshub_sql_password_secret.secret_data
-  depends_on    = [module.carshub_sql_password_secret]
+  backup_configuration        = []
+  vpc_self_link               = module.carshub_vpc.self_link
+  vpc_id                      = module.carshub_vpc.vpc_id
+  password                    = module.carshub_sql_password_secret.secret_data
+  depends_on                  = [module.carshub_sql_password_secret]
 }
 
 # CDN for handling media files
