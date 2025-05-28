@@ -17,7 +17,11 @@ module "carshub_apis" {
     "run.googleapis.com",
     "cloudfunctions.googleapis.com",
     "eventarc.googleapis.com",
-    "sqladmin.googleapis.com"
+    "sqladmin.googleapis.com",
+    "monitoring.googleapis.com",
+    "logging.googleapis.com",
+    "cloudtrace.googleapis.com",
+    "cloudprofiler.googleapis.com"
   ]
   disable_on_destroy = false
   project_id         = data.google_project.project.project_id
@@ -457,4 +461,78 @@ module "carshub_media_update_function" {
   event_trigger_service_account_email = module.carshub_function_app_service_account.sa_email
   event_filters                       = []
   depends_on                          = [module.carshub_function_app_service_account]
+}
+
+# Email notification channel
+resource "google_monitoring_notification_channel" "email_alerts" {
+  display_name = "Email Alerts"
+  type         = "email"
+  labels = {
+    email_address = "mohitfury1997@gmail.com"
+  }
+  enabled = true
+}
+
+# Metrics
+module "application_error_metrics" {
+  source       = "../../modules/observability/metrics"
+  name         = "application_error_count"
+  filter       = <<-EOT
+    resource.type="gce_instance" OR resource.type="cloud_run_revision" OR resource.type="cloud_function"
+    (severity="ERROR" OR severity="CRITICAL")
+    NOT protoPayload.methodName="beta.compute.autoscalers.patch"
+  EOT
+  metric_kind  = "CUMULATIVE"
+  value_type   = "INT64"
+  display_name = "Application Error Count"
+  label_extractors = {
+    "service_name" = "EXTRACT(resource.labels.service_name)"
+    "severity"     = "EXTRACT(severity)"
+  }
+}
+
+module "http_4xx_errors" {
+  source       = "../../modules/observability/metrics"
+  name         = "http_4xx_errors"
+  filter       = <<-EOT
+    resource.type="http_load_balancer"
+    httpRequest.status>=400
+    httpRequest.status<500
+  EOT
+  metric_kind  = "CUMULATIVE"
+  value_type   = "INT64"
+  display_name = "HTTP 4xx Errors"
+  label_extractors = {
+    "status_code" = "EXTRACT(httpRequest.status)"
+    "url_map"     = "EXTRACT(resource.labels.url_map_name)"
+  }
+}
+
+module "http_5xx_errors" {
+  source       = "../../modules/observability/metrics"
+  name         = "http_5xx_errors"
+  filter       = <<-EOT
+    resource.type="http_load_balancer"
+    httpRequest.status>=500
+  EOT
+  metric_kind  = "CUMULATIVE"
+  value_type   = "INT64"
+  display_name = "HTTP 5xx Errors"
+  label_extractors = {
+    "status_code" = "EXTRACT(httpRequest.status)"
+    "url_map"     = "EXTRACT(resource.labels.url_map_name)"
+  }
+}
+
+module "database_connection_errors" {
+  source       = "../../modules/observability/metrics"
+  name         = "database_connection_errors"
+  filter       = <<-EOT
+    resource.type="cloudsql_database"
+    (textPayload:"connection" OR textPayload:"timeout" OR textPayload:"failed")
+    severity="ERROR"
+  EOT
+  metric_kind  = "CUMULATIVE"
+  value_type   = "INT64"
+  display_name = "Database Connection Errors"
 }
