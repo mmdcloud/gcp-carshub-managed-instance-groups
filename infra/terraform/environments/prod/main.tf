@@ -56,23 +56,28 @@ module "carshub_firewall" {
     {
       allow_list = [
         {
-          ports    = ["80"]
-          protocol = "tcp"
-        },
-        {
-          ports    = ["22"]
-          protocol = "tcp"
-        },
-        {
           ports    = ["3000"]
           protocol = "tcp"
         }
       ]
-      firewall_name      = "carshub-firewall"
+      firewall_name      = "carshub-backend-lb-firewall"
+      firewall_direction = "INGRESS"
+      source_ranges      = ["0.0.0.0/0"]
+      source_tags        = [var.frontend_health_check]
+      target_tags        = [var.backend_health_check]
+    },
+    {
+      allow_list = [
+        {
+          ports    = ["80"]
+          protocol = "tcp"
+        }
+      ]
+      firewall_name      = "carshub-frontend-lb-firewall"
       firewall_direction = "INGRESS"
       source_ranges      = ["0.0.0.0/0"]
       source_tags        = []
-      target_tags        = [var.frontend_health_check, var.backend_health_check]
+      target_tags        = [var.frontend_health_check]
     }
   ]
   vpc_id = module.carshub_vpc.vpc_id
