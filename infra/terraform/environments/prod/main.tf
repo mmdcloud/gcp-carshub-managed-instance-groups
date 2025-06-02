@@ -417,7 +417,7 @@ module "carshub_function_app_service_account" {
   ]
 }
 
-// Create a Pub/Sub topic.
+// Pub/Sub topic.
 resource "google_pubsub_topic_iam_binding" "binding" {
   topic   = module.carshub_media_bucket_pubsub.topic_id
   role    = "roles/pubsub.publisher"
@@ -482,7 +482,7 @@ module "application_error_metrics" {
     (severity="ERROR" OR severity="CRITICAL")
     NOT protoPayload.methodName="beta.compute.autoscalers.patch"
   EOT
-  metric_kind  = "CUMULATIVE"
+  metric_kind  = "DELTA"
   value_type   = "INT64"
   display_name = "Application Error Count"
   label_extractors = {
@@ -499,7 +499,7 @@ module "http_4xx_errors" {
     httpRequest.status>=400
     httpRequest.status<500
   EOT
-  metric_kind  = "CUMULATIVE"
+  metric_kind  = "DELTA"
   value_type   = "INT64"
   display_name = "HTTP 4xx Errors"
   label_extractors = {
@@ -515,7 +515,7 @@ module "http_5xx_errors" {
     resource.type="http_load_balancer"
     httpRequest.status>=500
   EOT
-  metric_kind  = "CUMULATIVE"
+  metric_kind  = "DELTA"
   value_type   = "INT64"
   display_name = "HTTP 5xx Errors"
   label_extractors = {
@@ -532,7 +532,39 @@ module "database_connection_errors" {
     (textPayload:"connection" OR textPayload:"timeout" OR textPayload:"failed")
     severity="ERROR"
   EOT
-  metric_kind  = "CUMULATIVE"
+  metric_kind  = "DELTA"
   value_type   = "INT64"
   display_name = "Database Connection Errors"
+   label_extractors = {}
 }
+
+# Uptime checks
+module "frontend_uptime_check" {
+  source              = "../../modules/observability/uptime_checks"
+  display_name        = "Frontend Uptime Check"
+  timeout             = "30s"
+  period              = "60s"
+  http_path           = "/auth/signin"
+  http_port           = "80"
+  http_request_method = "GET"
+  http_validate_ssl   = false
+  resource_type       = "uptime_url"
+  resource_host       = module.frontend_lb.address
+  checker_type        = "STATIC_IP_CHECKERS"
+}
+
+module "backend_uptime_check" {
+  source              = "../../modules/observability/uptime_checks"
+  display_name        = "Backend Uptime Check"
+  timeout             = "30s"
+  period              = "60s"
+  http_path           = "/"
+  http_port           = "80"
+  http_request_method = "GET"
+  http_validate_ssl   = false
+  resource_type       = "uptime_url"
+  resource_host       = module.backend_lb.address
+  checker_type        = "STATIC_IP_CHECKERS"
+}
+
+# Alerts
