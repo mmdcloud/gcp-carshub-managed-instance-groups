@@ -96,7 +96,7 @@ module "carshub_vpc_connectors" {
       name          = "carshub-connector"
       ip_cidr_range = "10.8.0.0/28"
       min_instances = 2
-      max_instances = 10
+      max_instances = 5
       machine_type  = "f1-micro"
     }
   ]
@@ -104,40 +104,40 @@ module "carshub_vpc_connectors" {
 
 
 # Cloud Armor WAF protection for Load Balancers
-module "cloud_armor" {
-  source  = "GoogleCloudPlatform/cloud-armor/google"
-  version = "~> 5.0"
+# module "cloud_armor" {
+#   source  = "GoogleCloudPlatform/cloud-armor/google"
+#   version = "~> 5.0"
 
-  project_id                           = var.project_id
-  name                                 = "test-casp-policy"
-  description                          = "Test Cloud Armor security policy with preconfigured rules, security rules and custom rules"
-  default_rule_action                  = "allow"
-  type                                 = "CLOUD_ARMOR"
-  layer_7_ddos_defense_enable          = true
-  layer_7_ddos_defense_rule_visibility = "STANDARD"
-  user_ip_request_headers              = ["True-Client-IP", ]
+#   project_id                           = var.project_id
+#   name                                 = "test-casp-policy"
+#   description                          = "Test Cloud Armor security policy with preconfigured rules, security rules and custom rules"
+#   default_rule_action                  = "allow"
+#   type                                 = "CLOUD_ARMOR"
+#   layer_7_ddos_defense_enable          = true
+#   layer_7_ddos_defense_rule_visibility = "STANDARD"
+#   user_ip_request_headers              = ["True-Client-IP", ]
 
-  # preconfigured WAF rules
-  pre_configured_rules = {
-    "xss-stable_level_2_with_exclude" = {
-      action                  = "deny(502)"
-      priority                = 2
-      preview                 = true
-      target_rule_set         = "xss-v33-stable"
-      sensitivity_level       = 2
-      exclude_target_rule_ids = ["owasp-crs-v030301-id941380-xss", "owasp-crs-v030301-id941280-xss"]
-    }
+#   # preconfigured WAF rules
+#   pre_configured_rules = {
+#     "xss-stable_level_2_with_exclude" = {
+#       action                  = "deny(502)"
+#       priority                = 2
+#       preview                 = true
+#       target_rule_set         = "xss-v33-stable"
+#       sensitivity_level       = 2
+#       exclude_target_rule_ids = ["owasp-crs-v030301-id941380-xss", "owasp-crs-v030301-id941280-xss"]
+#     }
 
-    "php-stable_level_0_with_include" = {
-      action                  = "deny(502)"
-      priority                = 3
-      description             = "PHP Sensitivity Level 0 with included rules"
-      target_rule_set         = "php-v33-stable"
-      include_target_rule_ids = ["owasp-crs-v030301-id933190-php", "owasp-crs-v030301-id933111-php"]
-    }
+#     "php-stable_level_0_with_include" = {
+#       action                  = "deny(502)"
+#       priority                = 3
+#       description             = "PHP Sensitivity Level 0 with included rules"
+#       target_rule_set         = "php-v33-stable"
+#       include_target_rule_ids = ["owasp-crs-v030301-id933190-php", "owasp-crs-v030301-id933111-php"]
+#     }
 
-  }
-}
+#   }
+# }
 
 # Instance templates
 module "carshub_frontend_instance" {
@@ -210,7 +210,7 @@ module "frontend_lb" {
   backend_service_custom_request_headers  = ["X-Client-Geo-Location: {client_region_subdivision}, {client_city}"]
   backend_service_custom_response_headers = ["X-Cache-Hit: {cdn_cache_status}"]
   backend_service_health_checks           = [module.carshub_frontend_instance.health_check_id]
-  security_policy                         = module.cloud_armor.policy.id
+  # security_policy                         = module.cloud_armor.policy.id
   backend_service_backends = [
     {
       group           = "${module.carshub_frontend_instance.instance_group}"
@@ -239,7 +239,7 @@ module "backend_lb" {
   backend_service_custom_request_headers  = ["X-Client-Geo-Location: {client_region_subdivision}, {client_city}"]
   backend_service_custom_response_headers = ["X-Cache-Hit: {cdn_cache_status}"]
   backend_service_health_checks           = [module.carshub_backend_instance.health_check_id]
-  security_policy                         = module.cloud_armor.policy.id
+  # security_policy                         = module.cloud_armor.policy.id
   backend_service_backends = [
     {
       group           = "${module.carshub_backend_instance.instance_group}"
@@ -353,7 +353,7 @@ module "carshub_db" {
   disk_autoresize             = true
   disk_autoresize_limit       = 500 # GB
   ipv4_enabled                = false
-  deletion_protection_enabled = false
+  deletion_protection_enabled = true
   backup_configuration = [
     {
       enabled                        = true
@@ -474,69 +474,69 @@ resource "google_monitoring_notification_channel" "email_alerts" {
 }
 
 # Metrics
-module "application_error_metrics" {
-  source       = "../../modules/observability/metrics"
-  name         = "application_error_count"
-  filter       = <<-EOT
-    resource.type="gce_instance" OR resource.type="cloud_run_revision" OR resource.type="cloud_function"
-    (severity="ERROR" OR severity="CRITICAL")
-    NOT protoPayload.methodName="beta.compute.autoscalers.patch"
-  EOT
-  metric_kind  = "DELTA"
-  value_type   = "INT64"
-  display_name = "Application Error Count"
-  label_extractors = {
-    "service_name" = "EXTRACT(resource.labels.service_name)"
-    "severity"     = "EXTRACT(severity)"
-  }
-}
+# module "application_error_metrics" {
+#   source       = "../../modules/observability/metrics"
+#   name         = "application_error_count"
+#   filter       = <<-EOT
+#     resource.type="gce_instance" OR resource.type="cloud_run_revision" OR resource.type="cloud_function"
+#     (severity="ERROR" OR severity="CRITICAL")
+#     NOT protoPayload.methodName="beta.compute.autoscalers.patch"
+#   EOT
+#   metric_kind  = "DELTA"
+#   value_type   = "INT64"
+#   display_name = "Application Error Count"
+#   label_extractors = {
+#     "service_name" = "EXTRACT(resource.labels.service_name)"
+#     "severity"     = "EXTRACT(severity)"
+#   }
+# }
 
-module "http_4xx_errors" {
-  source       = "../../modules/observability/metrics"
-  name         = "http_4xx_errors"
-  filter       = <<-EOT
-    resource.type="http_load_balancer"
-    httpRequest.status>=400
-    httpRequest.status<500
-  EOT
-  metric_kind  = "DELTA"
-  value_type   = "INT64"
-  display_name = "HTTP 4xx Errors"
-  label_extractors = {
-    "status_code" = "EXTRACT(httpRequest.status)"
-    "url_map"     = "EXTRACT(resource.labels.url_map_name)"
-  }
-}
+# module "http_4xx_errors" {
+#   source       = "../../modules/observability/metrics"
+#   name         = "http_4xx_errors"
+#   filter       = <<-EOT
+#     resource.type="http_load_balancer"
+#     httpRequest.status>=400
+#     httpRequest.status<500
+#   EOT
+#   metric_kind  = "DELTA"
+#   value_type   = "INT64"
+#   display_name = "HTTP 4xx Errors"
+#   label_extractors = {
+#     "status_code" = "EXTRACT(httpRequest.status)"
+#     "url_map"     = "EXTRACT(resource.labels.url_map_name)"
+#   }
+# }
 
-module "http_5xx_errors" {
-  source       = "../../modules/observability/metrics"
-  name         = "http_5xx_errors"
-  filter       = <<-EOT
-    resource.type="http_load_balancer"
-    httpRequest.status>=500
-  EOT
-  metric_kind  = "DELTA"
-  value_type   = "INT64"
-  display_name = "HTTP 5xx Errors"
-  label_extractors = {
-    "status_code" = "EXTRACT(httpRequest.status)"
-    "url_map"     = "EXTRACT(resource.labels.url_map_name)"
-  }
-}
+# module "http_5xx_errors" {
+#   source       = "../../modules/observability/metrics"
+#   name         = "http_5xx_errors"
+#   filter       = <<-EOT
+#     resource.type="http_load_balancer"
+#     httpRequest.status>=500
+#   EOT
+#   metric_kind  = "DELTA"
+#   value_type   = "INT64"
+#   display_name = "HTTP 5xx Errors"
+#   label_extractors = {
+#     "status_code" = "EXTRACT(httpRequest.status)"
+#     "url_map"     = "EXTRACT(resource.labels.url_map_name)"
+#   }
+# }
 
-module "database_connection_errors" {
-  source       = "../../modules/observability/metrics"
-  name         = "database_connection_errors"
-  filter       = <<-EOT
-    resource.type="cloudsql_database"
-    (textPayload:"connection" OR textPayload:"timeout" OR textPayload:"failed")
-    severity="ERROR"
-  EOT
-  metric_kind  = "DELTA"
-  value_type   = "INT64"
-  display_name = "Database Connection Errors"
-   label_extractors = {}
-}
+# module "database_connection_errors" {
+#   source           = "../../modules/observability/metrics"
+#   name             = "database_connection_errors"
+#   filter           = <<-EOT
+#     resource.type="cloudsql_database"
+#     (textPayload:"connection" OR textPayload:"timeout" OR textPayload:"failed")
+#     severity="ERROR"
+#   EOT
+#   metric_kind      = "DELTA"
+#   value_type       = "INT64"
+#   display_name     = "Database Connection Errors"
+#   label_extractors = {}
+# }
 
 # Uptime checks
 module "frontend_uptime_check" {
