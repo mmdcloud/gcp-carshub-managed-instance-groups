@@ -1,44 +1,32 @@
-# VPC
 resource "google_compute_network" "vpc" {
-  name                    = var.vpc_name
-  auto_create_subnetworks = var.auto_create_subnetworks
+  name                            = var.vpc_name
+  delete_default_routes_on_create = var.delete_default_routes_on_create
+  auto_create_subnetworks         = var.auto_create_subnetworks
+  routing_mode                    = var.routing_mode
 }
 
-# Subnets
-resource "google_compute_subnetwork" "subnet" {
-  count         = length(var.subnets)
-  name          = element(var.subnets[*].name, count.index)
-  ip_cidr_range = element(var.subnets[*].ip_cidr_range, count.index)
-  region        = var.location
-  network       = google_compute_network.vpc.id
+resource "google_compute_subnetwork" "subnets" {
+  count                    = length(var.subnets)
+  name                     = var.subnets[count.index].name
+  ip_cidr_range            = var.subnets[count.index].ip_cidr_range
+  region                   = var.subnets[count.index].region
+  network                  = google_compute_network.vpc.id
+  private_ip_google_access = var.subnets[count.index].private_ip_google_access
+  purpose                  = var.subnets[count.index].purpose
+  role                     = var.subnets[count.index].role
 }
 
-# allow access from health check ranges
-resource "google_compute_firewall" "carshub_firewall" {
-  count         = length(var.firewall_data)
-  name          = element(var.firewall_data[*].firewall_name, count.index)
-  direction     = element(var.firewall_data[*].firewall_direction, count.index)
-  network       = google_compute_network.vpc.id
-  source_tags = var.firewall_data[*].source_tags == [] ? null :  element(var.firewall_data[*].source_tags, count.index)
-  source_ranges = var.firewall_data[*].source_ranges == [] ? null :  element(var.firewall_data[*].source_ranges, count.index)
+resource "google_compute_firewall" "firewall" {
+  count   = length(var.firewall_data)
+  name    = var.firewall_data[count.index].name
+  network = google_compute_network.vpc.id
   dynamic "allow" {
-    # for_each = var.firewall_data[*].allow_list
-    for_each = flatten([for data in var.firewall_data : data.allow_list])
+    for_each = var.firewall_data[count.index].allow_list
     content {
-      ports    = allow.value["ports"]
       protocol = allow.value["protocol"]
+      ports    = allow.value["ports"]
     }
   }
-  target_tags = element(var.firewall_data[*].target_tags, count.index)
-}
 
-# Serverless VPC Connector
-resource "google_vpc_access_connector" "connector" {
-  count         = length(var.serverless_vpc_connectors)
-  network       = google_compute_network.vpc.name
-  name          = var.serverless_vpc_connectors[count.index].name
-  ip_cidr_range = var.serverless_vpc_connectors[count.index].ip_cidr_range
-  min_instances = var.serverless_vpc_connectors[count.index].min_instances
-  max_instances = var.serverless_vpc_connectors[count.index].max_instances
-  machine_type  = var.serverless_vpc_connectors[count.index].machine_type
+  source_ranges = var.firewall_data[count.index].source_ranges
 }
