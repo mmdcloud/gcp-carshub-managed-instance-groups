@@ -59,8 +59,28 @@ module "carshub_vpc_connectors" {
       ip_cidr_range = "10.8.0.0/28"
       min_instances = 2
       max_instances = 3
-      machine_type  = "f1-micro"
+      machine_type  = "e2-micro"
     }
+  ]
+}
+
+# -----------------------------------------------------------------------------------------
+# Service Accounts
+# -----------------------------------------------------------------------------------------
+module "carshub_function_app_service_account" {
+  source        = "../../../modules/service-account"
+  account_id    = "carshub-service-account"
+  display_name  = "CarsHub Service Account"
+  project_id    = data.google_project.project.project_id
+  member_prefix = "serviceAccount"
+  permissions = [
+    "roles/run.invoker",
+    "roles/eventarc.eventReceiver",
+    "roles/cloudsql.client",
+    "roles/artifactregistry.reader",
+    # "roles/secretmanager.admin",
+    "roles/secretmanager.secretAccessor",
+    "roles/pubsub.publisher"
   ]
 }
 
@@ -71,11 +91,13 @@ module "cloud_armor" {
   source  = "GoogleCloudPlatform/cloud-armor/google"
   version = "~> 5.0"
 
-  project_id                           = data.google_project.project.project_id
-  name                                 = "carshub-security-policy"
-  description                          = "CarHub Cloud Armor security policy with WAF rules"
-  default_rule_action                  = "allow"
-  type                                 = "CLOUD_ARMOR"
+  project_id  = data.google_project.project.project_id
+  name        = "carshub-security-policy"
+  description = "CarHub Cloud Armor security policy with WAF rules"
+
+  default_rule_action = "allow"
+  type                = "CLOUD_ARMOR"
+
   layer_7_ddos_defense_enable          = true
   layer_7_ddos_defense_rule_visibility = "STANDARD"
   user_ip_request_headers              = ["True-Client-IP"]
@@ -83,19 +105,20 @@ module "cloud_armor" {
   security_rules = {
     # Rate limiting
     "rate_limit_rule" = {
-      action      = "rate_based_ban"
-      priority    = 1
-      description = "Rate limiting rule"
+      action        = "rate_based_ban"
+      priority      = 1
+      description   = "Rate limiting rule"
+      src_ip_ranges = ["*"]
+
       rate_limit_options = {
-        conform_action = "allow"
-        exceed_action  = "deny(429)"
-        enforce_on_key = "IP"
-        rate_limit_threshold = {
-          count        = 100
-          interval_sec = 60
-        }
-        ban_duration_sec = 600 # Increased from 300
+        conform_action                    = "allow"
+        exceed_action                     = "deny(429)"
+        enforce_on_key                    = "IP"
+        ban_duration_sec                  = 600
+        rate_limit_threshold_count        = 100
+        rate_limit_threshold_interval_sec = 60
       }
+
       match = {
         versioned_expr = "SRC_IPS_V1"
         config = {
@@ -106,15 +129,18 @@ module "cloud_armor" {
 
     # Block known bad IPs (you should maintain this list)
     "block_bad_ips" = {
-      action      = "deny(403)"
-      priority    = 10
-      description = "Block known malicious IPs"
+      action        = "deny(403)"
+      priority      = 10
+      description   = "Block known malicious IPs"
+      src_ip_ranges = ["*"]
+
       match = {
         versioned_expr = "SRC_IPS_V1"
         config = {
           src_ip_ranges = [
             # Add known malicious IPs here
             # "1.2.3.4/32",
+            # "5.6.7.8/32",
           ]
         }
       }
@@ -122,12 +148,14 @@ module "cloud_armor" {
 
     # Geographic restrictions (if needed)
     "geo_blocking" = {
-      action      = "deny(403)"
-      priority    = 11
-      description = "Block traffic from specific countries"
+      action        = "deny(403)"
+      priority      = 11
+      description   = "Block traffic from specific countries"
+      src_ip_ranges = ["*"]
+
       match = {
         expr = {
-          expression = "origin.region_code in ['CN', 'RU']" # Example: block China, Russia
+          expression = "origin.region_code in ['CN', 'RU']"
         }
       }
     }
@@ -140,48 +168,72 @@ module "cloud_armor" {
       target_rule_set   = "xss-v33-stable"
       sensitivity_level = 2
     }
+
     "sqli-stable_level_2" = {
       action            = "deny(403)"
       priority          = 3
       target_rule_set   = "sqli-v33-stable"
       sensitivity_level = 2
     }
+
     "lfi-stable_level_2" = {
       action            = "deny(403)"
       priority          = 4
       target_rule_set   = "lfi-v33-stable"
       sensitivity_level = 2
     }
+
     "rce-stable_level_2" = {
       action            = "deny(403)"
       priority          = 5
       target_rule_set   = "rce-v33-stable"
       sensitivity_level = 2
     }
+
     "rfi-stable_level_2" = {
       action            = "deny(403)"
       priority          = 6
       target_rule_set   = "rfi-v33-stable"
       sensitivity_level = 2
     }
+
     "scannerdetection-stable_level_2" = {
       action            = "deny(403)"
       priority          = 7
       target_rule_set   = "scannerdetection-v33-stable"
       sensitivity_level = 2
     }
+
     "protocolattack-stable_level_2" = {
       action            = "deny(403)"
       priority          = 8
       target_rule_set   = "protocolattack-v33-stable"
       sensitivity_level = 2
     }
+
     "sessionfixation-stable_level_2" = {
       action            = "deny(403)"
       priority          = 9
       target_rule_set   = "sessionfixation-v33-stable"
       sensitivity_level = 2
     }
+  }
+}
+
+# -----------------------------------------------------------------------------------------
+# SECURITY: SSL/TLS Configuration
+# -----------------------------------------------------------------------------------------
+resource "google_compute_managed_ssl_certificate" "carshub_frontend_ssl_cert" {
+  name = "carshub-frontend-ssl-cert"
+  managed {
+    domains = ["carshub-frontend.${var.domain}"]
+  }
+}
+
+resource "google_compute_managed_ssl_certificate" "carshub_backend_ssl_cert" {
+  name = "carshub-backend-ssl-cert"
+  managed {
+    domains = ["carshub-api.${var.domain}"]
   }
 }
 
@@ -487,24 +539,6 @@ module "carshub_cdn" {
 }
 
 # -----------------------------------------------------------------------------------------
-# Service Accounts
-# -----------------------------------------------------------------------------------------
-module "carshub_function_app_service_account" {
-  source       = "../../../modules/service-account"
-  account_id   = "carshub-service-account"
-  display_name = "CarsHub Service Account"
-  project_id   = data.google_project.project.project_id
-  permissions = [
-    "roles/run.invoker",
-    "roles/eventarc.eventReceiver",
-    "roles/cloudsql.client",
-    "roles/artifactregistry.reader",
-    "roles/secretmanager.admin",
-    "roles/pubsub.admin"
-  ]
-}
-
-# -----------------------------------------------------------------------------------------
 # PubSub Configuration
 # -----------------------------------------------------------------------------------------
 resource "google_pubsub_topic_iam_binding" "binding" {
@@ -647,6 +681,190 @@ module "database_connection_errors" {
   label_extractors = {}
 }
 
+# Response Time Tracking
+module "response_time_metric" {
+  source       = "../../../modules/observability/metrics"
+  name         = "http_response_time"
+  filter       = <<-EOT
+    resource.type="http_load_balancer"
+    httpRequest.latency>0
+  EOT
+  metric_kind  = "DELTA"
+  value_type   = "DISTRIBUTION"
+  display_name = "HTTP Response Time"
+  label_extractors = {
+    "url_map"  = "EXTRACT(resource.labels.url_map_name)"
+    "backend"  = "EXTRACT(resource.labels.backend_service_name)"
+  }
+  bucket_options = {
+    exponential_buckets = {
+      num_finite_buckets = 64
+      growth_factor      = 2
+      scale              = 0.01
+    }
+  }
+}
+
+# Request Rate Tracking
+module "request_rate_metric" {
+  source       = "../../../modules/observability/metrics"
+  name         = "http_request_rate"
+  filter       = <<-EOT
+    resource.type="http_load_balancer"
+  EOT
+  metric_kind  = "DELTA"
+  value_type   = "INT64"
+  display_name = "HTTP Request Rate"
+  label_extractors = {
+    "url_map"     = "EXTRACT(resource.labels.url_map_name)"
+    "status_code" = "EXTRACT(httpRequest.status)"
+    "method"      = "EXTRACT(httpRequest.requestMethod)"
+  }
+}
+
+# Cloud SQL Performance Metrics
+module "sql_query_duration" {
+  source       = "../../../modules/observability/metrics"
+  name         = "sql_slow_query_count"
+  filter       = <<-EOT
+    resource.type="cloudsql_database"
+    (textPayload:"query" OR textPayload:"SELECT" OR textPayload:"UPDATE")
+    jsonPayload.duration>1000
+  EOT
+  metric_kind  = "DELTA"
+  value_type   = "INT64"
+  display_name = "Slow SQL Query Count"
+  label_extractors = {
+    "database" = "EXTRACT(resource.labels.database_id)"
+  }
+}
+
+# Database Connection Pool Metrics
+module "db_connection_pool_exhaustion" {
+  source       = "../../../modules/observability/metrics"
+  name         = "db_connection_pool_exhaustion"
+  filter       = <<-EOT
+    resource.type="cloudsql_database"
+    (textPayload:"pool" OR textPayload:"max connections")
+    severity="WARNING"
+  EOT
+  metric_kind  = "DELTA"
+  value_type   = "INT64"
+  display_name = "Database Connection Pool Exhaustion"
+  label_extractors = {}
+}
+
+# Cloud Function Execution Metrics
+module "function_execution_errors" {
+  source       = "../../../modules/observability/metrics"
+  name         = "function_execution_errors"
+  filter       = <<-EOT
+    resource.type="cloud_function"
+    severity="ERROR"
+  EOT
+  metric_kind  = "DELTA"
+  value_type   = "INT64"
+  display_name = "Cloud Function Execution Errors"
+  label_extractors = {
+    "function_name" = "EXTRACT(resource.labels.function_name)"
+  }
+}
+
+# Cloud Function Cold Start Metrics
+module "function_cold_starts" {
+  source       = "../../../modules/observability/metrics"
+  name         = "function_cold_starts"
+  filter       = <<-EOT
+    resource.type="cloud_function"
+    textPayload:"cold start"
+  EOT
+  metric_kind  = "DELTA"
+  value_type   = "INT64"
+  display_name = "Cloud Function Cold Starts"
+  label_extractors = {
+    "function_name" = "EXTRACT(resource.labels.function_name)"
+  }
+}
+
+# Security Metrics - WAF Blocks
+module "waf_blocked_requests" {
+  source       = "../../../modules/observability/metrics"
+  name         = "waf_blocked_requests"
+  filter       = <<-EOT
+    resource.type="http_load_balancer"
+    httpRequest.status=403
+    jsonPayload.enforcedSecurityPolicy.name:"carshub-security-policy"
+  EOT
+  metric_kind  = "DELTA"
+  value_type   = "INT64"
+  display_name = "WAF Blocked Requests"
+  label_extractors = {
+    "rule_name" = "EXTRACT(jsonPayload.enforcedSecurityPolicy.name)"
+  }
+}
+
+# CDN Cache Hit Ratio
+module "cdn_cache_hits" {
+  source       = "../../../modules/observability/metrics"
+  name         = "cdn_cache_hits"
+  filter       = <<-EOT
+    resource.type="http_load_balancer"
+    jsonPayload.cacheId!=""
+    jsonPayload.cacheHit=true
+  EOT
+  metric_kind  = "DELTA"
+  value_type   = "INT64"
+  display_name = "CDN Cache Hits"
+  label_extractors = {}
+}
+
+module "cdn_cache_misses" {
+  source       = "../../../modules/observability/metrics"
+  name         = "cdn_cache_misses"
+  filter       = <<-EOT
+    resource.type="http_load_balancer"
+    jsonPayload.cacheId!=""
+    jsonPayload.cacheHit=false
+  EOT
+  metric_kind  = "DELTA"
+  value_type   = "INT64"
+  display_name = "CDN Cache Misses"
+  label_extractors = {}
+}
+
+# User Authentication Failures
+module "auth_failures" {
+  source       = "../../../modules/observability/metrics"
+  name         = "authentication_failures"
+  filter       = <<-EOT
+    resource.type="http_load_balancer"
+    httpRequest.requestUrl:"/auth/"
+    httpRequest.status=401
+  EOT
+  metric_kind  = "DELTA"
+  value_type   = "INT64"
+  display_name = "Authentication Failures"
+  label_extractors = {
+    "path" = "EXTRACT(httpRequest.requestUrl)"
+  }
+}
+
+# PubSub Message Processing Metrics
+module "pubsub_message_failures" {
+  source       = "../../../modules/observability/metrics"
+  name         = "pubsub_message_failures"
+  filter       = <<-EOT
+    resource.type="cloud_pubsub_subscription"
+    severity="ERROR"
+  EOT
+  metric_kind  = "DELTA"
+  value_type   = "INT64"
+  display_name = "PubSub Message Processing Failures"
+  label_extractors = {
+    "subscription" = "EXTRACT(resource.labels.subscription_id)"
+  }
+}
+
 # Alerting Policies
 module "high_error_rate_alert" {
   source                = "../../../modules/observability/alerts"
@@ -679,6 +897,190 @@ module "database_connection_alert" {
         duration        = "300s"
         comparison      = "COMPARISON_GREATER_THAN"
         threshold_value = 5
+      }
+    }
+  ]
+}
+
+# High Response Time Alert
+module "high_latency_alert" {
+  source                = "../../../modules/observability/alerts"
+  display_name          = "High Response Time Alert"
+  combiner              = "OR"
+  notification_channels = [
+    google_monitoring_notification_channel.email_alerts.id,
+    google_monitoring_notification_channel.slack_alerts.id
+  ]
+  conditions = [
+    {
+      display_name = "P95 Latency > 2s"
+      condition_threshold = {
+        filter          = "metric.type=\"logging.googleapis.com/user/http_response_time\" resource.type=\"http_load_balancer\""
+        duration        = "300s"
+        comparison      = "COMPARISON_GREATER_THAN"
+        threshold_value = 2000
+        aggregations = {
+          alignment_period     = "60s"
+          per_series_aligner   = "ALIGN_PERCENTILE_95"
+          cross_series_reducer = "REDUCE_MEAN"
+        }
+      }
+    }
+  ]
+}
+
+# Critical - Service Unavailable
+module "service_unavailable_alert" {
+  source                = "../../../modules/observability/alerts"
+  display_name          = "CRITICAL: Service Unavailable"
+  combiner              = "OR"
+  notification_channels = [
+    google_monitoring_notification_channel.email_alerts.id,
+    google_monitoring_notification_channel.slack_alerts.id,
+    google_monitoring_notification_channel.pagerduty_critical.id
+  ]
+  conditions = [
+    {
+      display_name = "Service Down for 3 minutes"
+      condition_threshold = {
+        filter          = "metric.type=\"monitoring.googleapis.com/uptime_check/check_passed\" resource.type=\"uptime_url\""
+        duration        = "180s"
+        comparison      = "COMPARISON_LESS_THAN"
+        threshold_value = 1
+      }
+    }
+  ]
+}
+
+# Database CPU Alert
+module "database_cpu_alert" {
+  source                = "../../../modules/observability/alerts"
+  display_name          = "Database High CPU Usage"
+  combiner              = "OR"
+  notification_channels = [google_monitoring_notification_channel.email_alerts.id]
+  conditions = [
+    {
+      display_name = "CPU Usage > 80%"
+      condition_threshold = {
+        filter          = "metric.type=\"cloudsql.googleapis.com/database/cpu/utilization\" resource.type=\"cloudsql_database\""
+        duration        = "300s"
+        comparison      = "COMPARISON_GREATER_THAN"
+        threshold_value = 0.80
+        aggregations = {
+          alignment_period     = "60s"
+          per_series_aligner   = "ALIGN_MEAN"
+        }
+      }
+    }
+  ]
+}
+
+# Database Memory Alert
+module "database_memory_alert" {
+  source                = "../../../modules/observability/alerts"
+  display_name          = "Database High Memory Usage"
+  combiner              = "OR"
+  notification_channels = [google_monitoring_notification_channel.email_alerts.id]
+  conditions = [
+    {
+      display_name = "Memory Usage > 85%"
+      condition_threshold = {
+        filter          = "metric.type=\"cloudsql.googleapis.com/database/memory/utilization\" resource.type=\"cloudsql_database\""
+        duration        = "300s"
+        comparison      = "COMPARISON_GREATER_THAN"
+        threshold_value = 0.85
+        aggregations = {
+          alignment_period     = "60s"
+          per_series_aligner   = "ALIGN_MEAN"
+        }
+      }
+    }
+  ]
+}
+
+# Cloud Function Failure Rate Alert
+module "function_failure_alert" {
+  source                = "../../../modules/observability/alerts"
+  display_name          = "Cloud Function High Failure Rate"
+  combiner              = "OR"
+  notification_channels = [google_monitoring_notification_channel.email_alerts.id]
+  conditions = [
+    {
+      display_name = "Function Error Rate > 5%"
+      condition_threshold = {
+        filter          = "metric.type=\"cloudfunctions.googleapis.com/function/execution_count\" resource.type=\"cloud_function\" metric.label.status!=\"ok\""
+        duration        = "300s"
+        comparison      = "COMPARISON_GREATER_THAN"
+        threshold_value = 5
+        aggregations = {
+          alignment_period     = "60s"
+          per_series_aligner   = "ALIGN_RATE"
+          cross_series_reducer = "REDUCE_SUM"
+        }
+      }
+    }
+  ]
+}
+
+# Disk Space Alert
+module "disk_space_alert" {
+  source                = "../../../modules/observability/alerts"
+  display_name          = "High Disk Usage Alert"
+  combiner              = "OR"
+  notification_channels = [google_monitoring_notification_channel.email_alerts.id]
+  conditions = [
+    {
+      display_name = "Disk Usage > 85%"
+      condition_threshold = {
+        filter          = "metric.type=\"compute.googleapis.com/instance/disk/utilization\" resource.type=\"gce_instance\""
+        duration        = "300s"
+        comparison      = "COMPARISON_GREATER_THAN"
+        threshold_value = 0.85
+      }
+    }
+  ]
+}
+
+# Network Traffic Spike Alert
+module "traffic_spike_alert" {
+  source                = "../../../modules/observability/alerts"
+  display_name          = "Unusual Traffic Spike Detected"
+  combiner              = "OR"
+  notification_channels = [
+    google_monitoring_notification_channel.email_alerts.id,
+    google_monitoring_notification_channel.slack_alerts.id
+  ]
+  conditions = [
+    {
+      display_name = "Request Rate 200% Above Normal"
+      condition_threshold = {
+        filter          = "metric.type=\"logging.googleapis.com/user/http_request_rate\" resource.type=\"http_load_balancer\""
+        duration        = "120s"
+        comparison      = "COMPARISON_GREATER_THAN"
+        threshold_value = 1000
+        aggregations = {
+          alignment_period     = "60s"
+          per_series_aligner   = "ALIGN_RATE"
+        }
+      }
+    }
+  ]
+}
+
+# SSL Certificate Expiry Alert
+module "ssl_cert_expiry_alert" {
+  source                = "../../../modules/observability/alerts"
+  display_name          = "SSL Certificate Expiring Soon"
+  combiner              = "OR"
+  notification_channels = [google_monitoring_notification_channel.email_alerts.id]
+  conditions = [
+    {
+      display_name = "Certificate Expires in 30 Days"
+      condition_threshold = {
+        filter          = "metric.type=\"loadbalancing.googleapis.com/https/certificate/expiration_time\" resource.type=\"ssl_certificate\""
+        duration        = "3600s"
+        comparison      = "COMPARISON_LESS_THAN"
+        threshold_value = 2592000 # 30 days in seconds
       }
     }
   ]
