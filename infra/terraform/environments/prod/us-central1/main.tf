@@ -87,138 +87,118 @@ module "carshub_function_app_service_account" {
 # -----------------------------------------------------------------------------------------
 # Cloud Armor WAF protection for Load Balancers
 # -----------------------------------------------------------------------------------------
-module "cloud_armor" {
-  source  = "GoogleCloudPlatform/cloud-armor/google"
-  version = "~> 5.0"
+# module "cloud_armor" {
+#   source  = "GoogleCloudPlatform/cloud-armor/google"
+#   version = "~> 5.0"
 
-  project_id  = data.google_project.project.project_id
-  name        = "carshub-security-policy"
-  description = "CarHub Cloud Armor security policy with WAF rules"
+#   project_id  = data.google_project.project.project_id
+#   name        = "carshub-security-policy"
+#   description = "CarHub Cloud Armor security policy with WAF rules"
 
-  default_rule_action = "allow"
-  type                = "CLOUD_ARMOR"
+#   default_rule_action = "allow"
+#   type                = "CLOUD_ARMOR"
 
-  layer_7_ddos_defense_enable          = true
-  layer_7_ddos_defense_rule_visibility = "STANDARD"
-  user_ip_request_headers              = ["True-Client-IP"]
+#   layer_7_ddos_defense_enable          = true
+#   layer_7_ddos_defense_rule_visibility = "STANDARD"
+#   user_ip_request_headers              = ["True-Client-IP"]
 
-  security_rules = {
-    # Rate limiting
-    "rate_limit_rule" = {
-      action        = "rate_based_ban"
-      priority      = 1
-      description   = "Rate limiting rule"
-      src_ip_ranges = ["*"]
+#   security_rules = {
+#     "rate_limit_rule" = {
+#       action        = "rate_based_ban"
+#       priority      = 1
+#       description   = "Rate limiting rule"
+#       src_ip_ranges = ["*"]
 
-      rate_limit_options = {
-        conform_action                    = "allow"
-        exceed_action                     = "deny(429)"
-        enforce_on_key                    = "IP"
-        ban_duration_sec                  = 600
-        rate_limit_threshold_count        = 100
-        rate_limit_threshold_interval_sec = 60
-      }
+#       rate_limit_options = {
+#         conform_action = "allow"
+#         exceed_action  = "deny(429)"
+#         enforce_on_key = "IP"
+#         ban_duration_sec = 600
 
-      match = {
-        versioned_expr = "SRC_IPS_V1"
-        config = {
-          src_ip_ranges = ["*"]
-        }
-      }
-    }
+#         # Correct field names for module v5.x
+#         rate_limit_http_request_count        = 100
+#         rate_limit_http_request_interval_sec = 60
+#         ban_http_request_count               = 1000
+#         ban_http_request_interval_sec        = 600
+#       }
 
-    # Block known bad IPs (you should maintain this list)
-    "block_bad_ips" = {
-      action        = "deny(403)"
-      priority      = 10
-      description   = "Block known malicious IPs"
-      src_ip_ranges = ["*"]
+#       match = {
+#         versioned_expr = "SRC_IPS_V1"
+#         config = {
+#           src_ip_ranges = ["*"]
+#         }
+#       }
+#     }
+#   }
 
-      match = {
-        versioned_expr = "SRC_IPS_V1"
-        config = {
-          src_ip_ranges = [
-            # Add known malicious IPs here
-            # "1.2.3.4/32",
-            # "5.6.7.8/32",
-          ]
-        }
-      }
-    }
+#   # geo_blocking uses CEL expression — must live in custom_rules, not security_rules
+#   custom_rules = {
+#     "geo_blocking" = {
+#       action      = "deny(403)"
+#       priority    = 10
+#       description = "Block traffic from specific countries"
+#       expression  = "origin.region_code in ['CN', 'RU']"
+#     }
+#   }
 
-    # Geographic restrictions (if needed)
-    "geo_blocking" = {
-      action        = "deny(403)"
-      priority      = 11
-      description   = "Block traffic from specific countries"
-      src_ip_ranges = ["*"]
+#   pre_configured_rules = {
+#     "xss-stable_level_2" = {
+#       action            = "deny(403)"
+#       priority          = 2
+#       target_rule_set   = "xss-v33-stable"
+#       sensitivity_level = 2
+#     }
 
-      match = {
-        expr = {
-          expression = "origin.region_code in ['CN', 'RU']"
-        }
-      }
-    }
-  }
+#     "sqli-stable_level_2" = {
+#       action            = "deny(403)"
+#       priority          = 3
+#       target_rule_set   = "sqli-v33-stable"
+#       sensitivity_level = 2
+#     }
 
-  pre_configured_rules = {
-    "xss-stable_level_2" = {
-      action            = "deny(403)"
-      priority          = 2
-      target_rule_set   = "xss-v33-stable"
-      sensitivity_level = 2
-    }
+#     "lfi-stable_level_2" = {
+#       action            = "deny(403)"
+#       priority          = 4
+#       target_rule_set   = "lfi-v33-stable"
+#       sensitivity_level = 2
+#     }
 
-    "sqli-stable_level_2" = {
-      action            = "deny(403)"
-      priority          = 3
-      target_rule_set   = "sqli-v33-stable"
-      sensitivity_level = 2
-    }
+#     "rce-stable_level_2" = {
+#       action            = "deny(403)"
+#       priority          = 5
+#       target_rule_set   = "rce-v33-stable"
+#       sensitivity_level = 2
+#     }
 
-    "lfi-stable_level_2" = {
-      action            = "deny(403)"
-      priority          = 4
-      target_rule_set   = "lfi-v33-stable"
-      sensitivity_level = 2
-    }
+#     "rfi-stable_level_2" = {
+#       action            = "deny(403)"
+#       priority          = 6
+#       target_rule_set   = "rfi-v33-stable"
+#       sensitivity_level = 2
+#     }
 
-    "rce-stable_level_2" = {
-      action            = "deny(403)"
-      priority          = 5
-      target_rule_set   = "rce-v33-stable"
-      sensitivity_level = 2
-    }
+#     "scannerdetection-stable_level_2" = {
+#       action            = "deny(403)"
+#       priority          = 7
+#       target_rule_set   = "scannerdetection-v33-stable"
+#       sensitivity_level = 2
+#     }
 
-    "rfi-stable_level_2" = {
-      action            = "deny(403)"
-      priority          = 6
-      target_rule_set   = "rfi-v33-stable"
-      sensitivity_level = 2
-    }
+#     "protocolattack-stable_level_2" = {
+#       action            = "deny(403)"
+#       priority          = 8
+#       target_rule_set   = "protocolattack-v33-stable"
+#       sensitivity_level = 2
+#     }
 
-    "scannerdetection-stable_level_2" = {
-      action            = "deny(403)"
-      priority          = 7
-      target_rule_set   = "scannerdetection-v33-stable"
-      sensitivity_level = 2
-    }
-
-    "protocolattack-stable_level_2" = {
-      action            = "deny(403)"
-      priority          = 8
-      target_rule_set   = "protocolattack-v33-stable"
-      sensitivity_level = 2
-    }
-
-    "sessionfixation-stable_level_2" = {
-      action            = "deny(403)"
-      priority          = 9
-      target_rule_set   = "sessionfixation-v33-stable"
-      sensitivity_level = 2
-    }
-  }
-}
+#     "sessionfixation-stable_level_2" = {
+#       action            = "deny(403)"
+#       priority          = 9
+#       target_rule_set   = "sessionfixation-v33-stable"
+#       sensitivity_level = 2
+#     }
+#   }
+# }
 
 # -----------------------------------------------------------------------------------------
 # SECURITY: SSL/TLS Configuration
@@ -359,22 +339,10 @@ module "carshub_media_bucket" {
   name     = "carshub-media"
   cors = [
     {
-      origin          = ["http://${module.frontend_lb.address}"]
+      origin          = ["http://${module.carshub_frontend_service_lb.ip_address}"]
       max_age_seconds = 3600
       method          = ["GET", "POST", "PUT", "DELETE"]
       response_header = ["*"]
-    }
-  ]
-  contents = [
-    {
-      name        = "images/"
-      content     = " "
-      source_path = ""
-    },
-    {
-      name        = "documents/"
-      content     = " "
-      source_path = ""
     }
   ]
   versioning = true
@@ -398,12 +366,24 @@ module "carshub_media_bucket" {
       }
     }
   ]
+  contents = [
+    {
+      name        = "images/"
+      content     = " "
+      source_path = ""
+    },
+    {
+      name        = "documents/"
+      content     = " "
+      source_path = ""
+    }
+  ]
   notifications = [
     {
       topic_id = module.carshub_media_bucket_pubsub.topic_id
     }
   ]
-  force_destroy               = true
+  force_destroy               = false
   uniform_bucket_level_access = true
 }
 
@@ -414,8 +394,8 @@ module "carshub_media_bucket_code" {
   cors     = []
   contents = [
     {
-      name        = "code.zip"
-      source_path = "${path.root}/../../files/code.zip"
+      name        = "carshub_media_function_code.zip"
+      source_path = "${path.root}/../../../files/carshub_media_function_code.zip"
       content     = ""
     }
   ]
@@ -467,7 +447,7 @@ module "carshub_db" {
   disk_autoresize             = true
   disk_autoresize_limit       = 500 # GB
   ipv4_enabled                = false
-  deletion_protection_enabled = false
+  deletion_protection_enabled = true
   backup_configuration = [
     {
       enabled                        = true
@@ -484,6 +464,14 @@ module "carshub_db" {
     }
   ]
   database_flags = [
+    {
+      name  = "general_log"
+      value = "on"
+    },
+    {
+      name  = "log_queries_not_using_indexes"
+      value = "on"
+    },
     {
       name  = "max_connections"
       value = "1000"
@@ -503,15 +491,6 @@ module "carshub_db" {
     {
       name  = "log_output"
       value = "FILE"
-    },
-    # Performance tuning
-    {
-      name  = "innodb_buffer_pool_size"
-      value = "10737418240" # 10GB for 16GB instance
-    },
-    {
-      name  = "innodb_log_file_size"
-      value = "536870912" # 512MB
     }
   ]
   vpc_self_link = module.carshub_vpc.self_link
@@ -547,7 +526,6 @@ resource "google_pubsub_topic_iam_binding" "binding" {
   members = ["serviceAccount:${data.google_storage_project_service_account.carshub_gcs_account.email_address}"]
 }
 
-# Creating a Pub/Sub topic to send cloud storage events
 module "carshub_media_bucket_pubsub" {
   source = "../../../modules/pubsub"
   topic  = "carshub_media_bucket_events"
@@ -576,8 +554,8 @@ module "carshub_media_update_function" {
   vpc_connector_egress_settings       = "ALL_TRAFFIC"
   ingress_settings                    = "ALLOW_INTERNAL_ONLY"
   function_app_service_account_email  = module.carshub_function_app_service_account.sa_email
-  max_instance_count                  = 3
-  min_instance_count                  = 1
+  max_instance_count                  = 10
+  min_instance_count                  = 2
   available_memory                    = "256M"
   timeout_seconds                     = 60
   event_trigger_event_type            = "google.cloud.pubsub.topic.v1.messagePublished"
@@ -693,15 +671,8 @@ module "response_time_metric" {
   value_type   = "DISTRIBUTION"
   display_name = "HTTP Response Time"
   label_extractors = {
-    "url_map"  = "EXTRACT(resource.labels.url_map_name)"
-    "backend"  = "EXTRACT(resource.labels.backend_service_name)"
-  }
-  bucket_options = {
-    exponential_buckets = {
-      num_finite_buckets = 64
-      growth_factor      = 2
-      scale              = 0.01
-    }
+    "url_map" = "EXTRACT(resource.labels.url_map_name)"
+    "backend" = "EXTRACT(resource.labels.backend_service_name)"
   }
 }
 
@@ -741,16 +712,16 @@ module "sql_query_duration" {
 
 # Database Connection Pool Metrics
 module "db_connection_pool_exhaustion" {
-  source       = "../../../modules/observability/metrics"
-  name         = "db_connection_pool_exhaustion"
-  filter       = <<-EOT
+  source           = "../../../modules/observability/metrics"
+  name             = "db_connection_pool_exhaustion"
+  filter           = <<-EOT
     resource.type="cloudsql_database"
     (textPayload:"pool" OR textPayload:"max connections")
     severity="WARNING"
   EOT
-  metric_kind  = "DELTA"
-  value_type   = "INT64"
-  display_name = "Database Connection Pool Exhaustion"
+  metric_kind      = "DELTA"
+  value_type       = "INT64"
+  display_name     = "Database Connection Pool Exhaustion"
   label_extractors = {}
 }
 
@@ -805,30 +776,30 @@ module "waf_blocked_requests" {
 
 # CDN Cache Hit Ratio
 module "cdn_cache_hits" {
-  source       = "../../../modules/observability/metrics"
-  name         = "cdn_cache_hits"
-  filter       = <<-EOT
+  source           = "../../../modules/observability/metrics"
+  name             = "cdn_cache_hits"
+  filter           = <<-EOT
     resource.type="http_load_balancer"
     jsonPayload.cacheId!=""
     jsonPayload.cacheHit=true
   EOT
-  metric_kind  = "DELTA"
-  value_type   = "INT64"
-  display_name = "CDN Cache Hits"
+  metric_kind      = "DELTA"
+  value_type       = "INT64"
+  display_name     = "CDN Cache Hits"
   label_extractors = {}
 }
 
 module "cdn_cache_misses" {
-  source       = "../../../modules/observability/metrics"
-  name         = "cdn_cache_misses"
-  filter       = <<-EOT
+  source           = "../../../modules/observability/metrics"
+  name             = "cdn_cache_misses"
+  filter           = <<-EOT
     resource.type="http_load_balancer"
     jsonPayload.cacheId!=""
     jsonPayload.cacheHit=false
   EOT
-  metric_kind  = "DELTA"
-  value_type   = "INT64"
-  display_name = "CDN Cache Misses"
+  metric_kind      = "DELTA"
+  value_type       = "INT64"
+  display_name     = "CDN Cache Misses"
   label_extractors = {}
 }
 
@@ -904,9 +875,9 @@ module "database_connection_alert" {
 
 # High Response Time Alert
 module "high_latency_alert" {
-  source                = "../../../modules/observability/alerts"
-  display_name          = "High Response Time Alert"
-  combiner              = "OR"
+  source       = "../../../modules/observability/alerts"
+  display_name = "High Response Time Alert"
+  combiner     = "OR"
   notification_channels = [
     google_monitoring_notification_channel.email_alerts.id,
     google_monitoring_notification_channel.slack_alerts.id
@@ -931,9 +902,9 @@ module "high_latency_alert" {
 
 # Critical - Service Unavailable
 module "service_unavailable_alert" {
-  source                = "../../../modules/observability/alerts"
-  display_name          = "CRITICAL: Service Unavailable"
-  combiner              = "OR"
+  source       = "../../../modules/observability/alerts"
+  display_name = "CRITICAL: Service Unavailable"
+  combiner     = "OR"
   notification_channels = [
     google_monitoring_notification_channel.email_alerts.id,
     google_monitoring_notification_channel.slack_alerts.id,
@@ -967,8 +938,8 @@ module "database_cpu_alert" {
         comparison      = "COMPARISON_GREATER_THAN"
         threshold_value = 0.80
         aggregations = {
-          alignment_period     = "60s"
-          per_series_aligner   = "ALIGN_MEAN"
+          alignment_period   = "60s"
+          per_series_aligner = "ALIGN_MEAN"
         }
       }
     }
@@ -990,8 +961,8 @@ module "database_memory_alert" {
         comparison      = "COMPARISON_GREATER_THAN"
         threshold_value = 0.85
         aggregations = {
-          alignment_period     = "60s"
-          per_series_aligner   = "ALIGN_MEAN"
+          alignment_period   = "60s"
+          per_series_aligner = "ALIGN_MEAN"
         }
       }
     }
@@ -1043,9 +1014,9 @@ module "disk_space_alert" {
 
 # Network Traffic Spike Alert
 module "traffic_spike_alert" {
-  source                = "../../../modules/observability/alerts"
-  display_name          = "Unusual Traffic Spike Detected"
-  combiner              = "OR"
+  source       = "../../../modules/observability/alerts"
+  display_name = "Unusual Traffic Spike Detected"
+  combiner     = "OR"
   notification_channels = [
     google_monitoring_notification_channel.email_alerts.id,
     google_monitoring_notification_channel.slack_alerts.id
@@ -1059,8 +1030,8 @@ module "traffic_spike_alert" {
         comparison      = "COMPARISON_GREATER_THAN"
         threshold_value = 1000
         aggregations = {
-          alignment_period     = "60s"
-          per_series_aligner   = "ALIGN_RATE"
+          alignment_period   = "60s"
+          per_series_aligner = "ALIGN_RATE"
         }
       }
     }
