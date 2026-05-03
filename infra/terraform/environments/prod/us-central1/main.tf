@@ -38,13 +38,170 @@ module "carshub_apis" {
 # -----------------------------------------------------------------------------------------
 module "carshub_vpc" {
   source                          = "../../../modules/vpc"
-  vpc_name                        = "carshub-vpc"
+  vpc_name                        = "carshub-vpc-${var.environment}"
   delete_default_routes_on_create = false
   auto_create_subnetworks         = false
   routing_mode                    = "REGIONAL"
   region                          = var.location
   subnets                         = []
-  firewall_data                   = []
+}
+
+# -----------------------------------------------------------------------------------------
+# Firewall Rules
+# -----------------------------------------------------------------------------------------
+resource "google_compute_firewall" "allow_health_checks" {
+  name    = "carshub-allow-health-checks-${var.environment}"
+  network = module.carshub_vpc.vpc_name
+
+  allow {
+    protocol = "tcp"
+    ports    = ["80", "443", "8080"]
+  }
+
+  source_ranges = [
+    "130.211.0.0/22",  
+    "35.191.0.0/16"    
+  ]
+
+  target_tags = ["carshub-frontend", "carshub-backend"]
+
+  description = "Allow GCP load balancer health checks to frontend and backend MIGs"
+  priority    = 1000
+}
+
+resource "google_compute_firewall" "allow_lb_to_frontend" {
+  name    = "carshub-allow-lb-to-frontend-${var.environment}"
+  network = module.carshub_vpc.vpc_name
+
+  allow {
+    protocol = "tcp"
+    ports    = ["80"]
+  }
+
+  source_ranges = [
+    "130.211.0.0/22",
+    "35.191.0.0/16"
+  ]
+
+  target_tags = ["carshub-frontend"]
+
+  description = "Allow GFE/LB traffic to frontend MIG"
+  priority    = 1000
+}
+
+resource "google_compute_firewall" "allow_lb_to_backend" {
+  name    = "carshub-allow-lb-to-backend-${var.environment}"
+  network = module.carshub_vpc.vpc_name
+
+  allow {
+    protocol = "tcp"
+    ports    = ["80"]
+  }
+
+  source_ranges = [
+    "130.211.0.0/22",
+    "35.191.0.0/16"
+  ]
+
+  target_tags = ["carshub-backend"]
+
+  description = "Allow GFE/LB traffic to backend MIG"
+  priority    = 1000
+}
+
+resource "google_compute_firewall" "allow_frontend_to_backend" {
+  name    = "carshub-allow-frontend-to-backend-${var.environment}"
+  network = module.carshub_vpc.vpc_name
+
+  allow {
+    protocol = "tcp"
+    ports    = ["80"]
+  }
+
+  source_tags = ["carshub-frontend"]
+  target_tags = ["carshub-backend"]
+
+  description = "Allow frontend instances to call backend API"
+  priority    = 1000
+}
+
+resource "google_compute_firewall" "allow_backend_to_sql" {
+  name    = "carshub-allow-backend-to-sql-${var.environment}"
+  network = module.carshub_vpc.vpc_name
+
+  allow {
+    protocol = "tcp"
+    ports    = ["3306"]
+  }
+
+  source_tags = ["carshub-backend"]
+
+  destination_ranges = ["10.0.0.0/8"]
+
+  description = "Allow backend MIG to reach Cloud SQL via private IP"
+  priority    = 1000
+}
+
+resource "google_compute_firewall" "allow_vpc_connector_to_backend" {
+  name    = "carshub-allow-vpc-connector-to-backend-${var.environment}"
+  network = module.carshub_vpc.vpc_name
+
+  allow {
+    protocol = "tcp"
+    ports    = ["80", "8080"]
+  }
+
+  source_ranges = ["10.8.0.0/28"]
+  target_tags   = ["carshub-backend"]
+
+  description = "Allow Cloud Function (via VPC connector) to reach backend MIG"
+  priority    = 1000
+}
+
+resource "google_compute_firewall" "allow_vpc_connector_to_sql" {
+  name    = "carshub-allow-vpc-connector-to-sql-${var.environment}"
+  network = module.carshub_vpc.vpc_name
+
+  allow {
+    protocol = "tcp"
+    ports    = ["3306"]
+  }
+
+  source_ranges      = ["10.8.0.0/28"]
+  destination_ranges = ["10.0.0.0/8"]
+
+  description = "Allow Cloud Function (via VPC connector) to reach Cloud SQL"
+  priority    = 1000
+}
+
+resource "google_compute_firewall" "allow_iap_ssh" {
+  name    = "carshub-allow-iap-ssh-${var.environment}"
+  network = module.carshub_vpc.vpc_name
+
+  allow {
+    protocol = "tcp"
+    ports    = ["22"]
+  }
+
+  source_ranges = ["35.235.240.0/20"]
+  target_tags   = ["carshub-frontend", "carshub-backend"]
+
+  description = "Allow SSH via Identity-Aware Proxy tunnel"
+  priority    = 1000
+}
+
+resource "google_compute_firewall" "deny_all_ingress" {
+  name    = "carshub-deny-all-ingress-${var.environment}"
+  network = module.carshub_vpc.vpc_name
+
+  deny {
+    protocol = "all"
+  }
+
+  source_ranges = ["0.0.0.0/0"]
+
+  description = "Explicit catch-all deny for undocumented ingress traffic"
+  priority    = 65534
 }
 
 # -----------------------------------------------------------------------------------------
@@ -55,7 +212,7 @@ module "carshub_vpc_connectors" {
   vpc_name = module.carshub_vpc.vpc_name
   serverless_vpc_connectors = [
     {
-      name          = "carshub-connector"
+      name          = "carshub-connector-${var.environment}"
       ip_cidr_range = "10.8.0.0/28"
       min_instances = 2
       max_instances = 3
@@ -69,7 +226,7 @@ module "carshub_vpc_connectors" {
 # -----------------------------------------------------------------------------------------
 module "carshub_function_app_service_account" {
   source        = "../../../modules/service-account"
-  account_id    = "carshub-service-account"
+  account_id    = "carshub-function-app-sa-${var.environment}"
   display_name  = "CarsHub Service Account"
   project_id    = data.google_project.project.project_id
   member_prefix = "serviceAccount"
@@ -204,14 +361,14 @@ module "carshub_function_app_service_account" {
 # SECURITY: SSL/TLS Configuration
 # -----------------------------------------------------------------------------------------
 resource "google_compute_managed_ssl_certificate" "carshub_frontend_ssl_cert" {
-  name = "carshub-frontend-ssl-cert"
+  name = "carshub-frontend-ssl-cert-${var.environment}"
   managed {
     domains = ["carshub-frontend.${var.domain}"]
   }
 }
 
 resource "google_compute_managed_ssl_certificate" "carshub_backend_ssl_cert" {
-  name = "carshub-backend-ssl-cert"
+  name = "carshub-backend-ssl-cert-${var.environment}"
   managed {
     domains = ["carshub-api.${var.domain}"]
   }
@@ -277,15 +434,15 @@ module "carshub_backend_instance" {
 module "frontend_lb" {
   source                                  = "../../../modules/load-balancer"
   forwarding_port_range                   = "80"
-  forwarding_rule_name                    = "carshub-frontend-global-forwarding-rule"
+  forwarding_rule_name                    = "carshub-frontend-global-forwarding-rule-${var.environment}"
   forwarding_scheme                       = "EXTERNAL"
   global_address_type                     = "EXTERNAL"
-  url_map_name                            = "carshub-frontend-url-map"
-  global_address_name                     = "carshub-frontend-lb-global-address"
-  target_proxy_name                       = "carshub-frontend-target-proxy"
-  backend_service_name                    = "carshub-frontend-service"
+  url_map_name                            = "carshub-frontend-url-map-${var.environment}"
+  global_address_name                     = "carshub-frontend-lb-global-address-${var.environment}"
+  target_proxy_name                       = "carshub-frontend-target-proxy-${var.environment}"
+  backend_service_name                    = "carshub-frontend-service-${var.environment}"
   backend_service_enable_cdn              = false
-  backend_service_port_name               = "carshub-frontend-port"
+  backend_service_port_name               = "carshub-frontend-port-${var.environment}"
   backend_service_protocol                = "HTTP"
   backend_service_timeout_sec             = 10
   backend_service_load_balancing_scheme   = "EXTERNAL"
@@ -305,15 +462,15 @@ module "frontend_lb" {
 module "backend_lb" {
   source                                  = "../../../modules/load-balancer"
   forwarding_port_range                   = "80"
-  forwarding_rule_name                    = "carshub-backend-global-forwarding-rule"
+  forwarding_rule_name                    = "carshub-backend-global-forwarding-rule-${var.environment}"
   forwarding_scheme                       = "EXTERNAL"
   global_address_type                     = "EXTERNAL"
-  url_map_name                            = "carshub-backend-url-map"
-  global_address_name                     = "carshub-backend-lb-global-address"
-  target_proxy_name                       = "carshub-backend-target-proxy"
-  backend_service_name                    = "carshub-backend-service"
+  url_map_name                            = "carshub-backend-url-map-${var.environment}"
+  global_address_name                     = "carshub-backend-lb-global-address-${var.environment}"
+  target_proxy_name                       = "carshub-backend-target-proxy-${var.environment}"
+  backend_service_name                    = "carshub-backend-service-${var.environment}"
   backend_service_enable_cdn              = false
-  backend_service_port_name               = "carshub-backend-port"
+  backend_service_port_name               = "carshub-backend-port-${var.environment}"
   backend_service_protocol                = "HTTP"
   backend_service_timeout_sec             = 10
   backend_service_load_balancing_scheme   = "EXTERNAL"
@@ -336,7 +493,7 @@ module "backend_lb" {
 module "carshub_media_bucket" {
   source   = "../../../modules/gcs"
   location = var.location
-  name     = "carshub-media"
+  name     = "carshub-media-${var.environment}"
   cors = [
     {
       origin          = ["http://${module.carshub_frontend_service_lb.ip_address}"]
@@ -390,7 +547,7 @@ module "carshub_media_bucket" {
 module "carshub_media_bucket_code" {
   source   = "../../../modules/gcs"
   location = var.location
-  name     = "carshub-media-code"
+  name     = "carshub-media-code-${var.environment}"
   cors     = []
   contents = [
     {
@@ -419,14 +576,14 @@ resource "google_storage_bucket_iam_binding" "storage_iam_binding" {
 module "carshub_sql_password_secret" {
   source      = "../../../modules/secret-manager"
   secret_data = tostring(data.vault_generic_secret.sql.data["password"])
-  secret_id   = "carshub_db_password_secret"
+  secret_id   = "carshub-db-password-secret-${var.environment}"
   depends_on  = [module.carshub_apis]
 }
 
 module "carshub_sql_username_secret" {
   source      = "../../../modules/secret-manager"
   secret_data = tostring(data.vault_generic_secret.sql.data["username"])
-  secret_id   = "carshub_db_username_secret"
+  secret_id   = "carshub-db-username-secret-${var.environment}"
   depends_on  = [module.carshub_apis]
 }
 
@@ -435,8 +592,8 @@ module "carshub_sql_username_secret" {
 # -----------------------------------------------------------------------------------------
 module "carshub_db" {
   source                      = "../../../modules/cloud-sql"
-  name                        = "carshub-db-instance"
-  db_name                     = "carshub"
+  name                        = "carshub-db-instance-${var.environment}"
+  db_name                     = "carshub-${var.environment}"
   db_user                     = module.carshub_sql_username_secret.secret_data
   db_version                  = "MYSQL_8_0"
   location                    = var.location
@@ -507,14 +664,14 @@ module "carshub_cdn" {
   bucket_name           = module.carshub_media_bucket.bucket_name
   enable_cdn            = true
   description           = "Content delivery network for media files"
-  name                  = "carshub-media-cdn"
+  name                  = "carshub-media-cdn-${var.environment}"
   forwarding_port_range = "80"
-  forwarding_rule_name  = "carshub-cdn-global-forwarding-rule"
+  forwarding_rule_name  = "carshub-cdn-global-forwarding-rule-${var.environment}"
   forwarding_scheme     = "EXTERNAL"
   global_address_type   = "EXTERNAL"
-  url_map_name          = "carshub-cdn-compute-url-map"
-  global_address_name   = "carshub-cdn-lb-global-address"
-  target_proxy_name     = "carshub-cdn-target-proxy"
+  url_map_name          = "carshub-cdn-compute-url-map-${var.environment}"
+  global_address_name   = "carshub-cdn-lb-global-address-${var.environment}"
+  target_proxy_name     = "carshub-cdn-target-proxy-${var.environment}"
 }
 
 # -----------------------------------------------------------------------------------------
@@ -528,7 +685,7 @@ resource "google_pubsub_topic_iam_binding" "binding" {
 
 module "carshub_media_bucket_pubsub" {
   source = "../../../modules/pubsub"
-  topic  = "carshub_media_bucket_events"
+  topic  = "carshub-media-bucket-events-${var.environment}"
 }
 
 # -----------------------------------------------------------------------------------------
@@ -536,7 +693,7 @@ module "carshub_media_bucket_pubsub" {
 # -----------------------------------------------------------------------------------------
 module "carshub_media_update_function" {
   source                       = "../../../modules/cloud-run-function"
-  function_name                = "carshub-media-function"
+  function_name                = "carshub-media-function-${var.environment}"
   function_description         = "A function to update media details in SQL database after the upload trigger"
   handler                      = "handler"
   runtime                      = "python312"

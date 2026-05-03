@@ -3,16 +3,16 @@ variable "delete_default_routes_on_create" {}
 variable "auto_create_subnetworks" {}
 variable "routing_mode" {}
 variable "region" {}
-variable "firewall_data" {
-  type = list(object({
-    name          = string
-    source_ranges = set(string)
-    allow_list = set(object({
-      protocol = string
-      ports    = list(string)
-    }))
-  }))
-}
+# variable "firewall_data" {
+#   type = list(object({
+#     name          = string
+#     source_ranges = set(string)
+#     allow_list = set(object({
+#       protocol = string
+#       ports    = list(string)
+#     }))
+#   }))
+# }
 variable "subnets" {
   type = list(object({
     name                     = string

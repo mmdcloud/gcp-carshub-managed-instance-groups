@@ -16,17 +16,17 @@ resource "google_compute_subnetwork" "subnets" {
   role                     = var.subnets[count.index].role
 }
 
-resource "google_compute_firewall" "firewall" {
-  count   = length(var.firewall_data)
-  name    = var.firewall_data[count.index].name
-  network = google_compute_network.vpc.id
-  dynamic "allow" {
-    for_each = var.firewall_data[count.index].allow_list
-    content {
-      protocol = allow.value["protocol"]
-      ports    = allow.value["ports"]
-    }
-  }
+# resource "google_compute_firewall" "firewall" {
+#   count   = length(var.firewall_data)
+#   name    = var.firewall_data[count.index].name
+#   network = google_compute_network.vpc.id
+#   dynamic "allow" {
+#     for_each = var.firewall_data[count.index].allow_list
+#     content {
+#       protocol = allow.value["protocol"]
+#       ports    = allow.value["ports"]
+#     }
+#   }
 
-  source_ranges = var.firewall_data[count.index].source_ranges
-}
+#   source_ranges = var.firewall_data[count.index].source_ranges
+# }
