@@ -59,8 +59,8 @@ resource "google_compute_firewall" "allow_health_checks" {
   }
 
   source_ranges = [
-    "130.211.0.0/22",  
-    "35.191.0.0/16"    
+    "130.211.0.0/22",
+    "35.191.0.0/16"
   ]
 
   target_tags = ["carshub-frontend", "carshub-backend"]
@@ -378,54 +378,160 @@ resource "google_compute_managed_ssl_certificate" "carshub_backend_ssl_cert" {
 # Instance templates
 # -----------------------------------------------------------------------------------------
 module "carshub_frontend_instance" {
-  source        = "../../../modules/compute"
-  auto_delete   = var.ubuntu_auto_delete
-  boot          = var.ubuntu_boot
-  source_image  = var.ubuntu_source_os_image
-  template_name = var.frontend_template_name
-  machine_type  = var.ubuntu_machine_type
-  network       = module.carshub_vpc.vpc_id
-  subnetwork    = module.carshub_private_subnets.subnets[0].id
+  source                 = "../../../modules/instance-template"
+  project_id             = data.google_project.project.project_id
+  region                 = var.location
+  name_prefix            = "producer-instance-template"
+  machine_type           = "e2-medium"
+  source_image           = "ubuntu-minimal-2604-resolute-amd64-v20260704"
+  boot_disk_size_gb      = 50
+  boot_disk_type         = "pd-balanced"
+  network                = module.carshub_vpc.vpc_id
+  subnetwork             = module.carshub_private_subnets.subnets[0].id
+  assign_public_ip       = false
+  network_tags           = ["producer-instance"]
+  create_service_account = true
+  service_account_roles = [
+    "roles/logging.logWriter",
+    "roles/monitoring.metricWriter",
+  ]
   startup_script = templatefile("${path.module}/../../scripts/user_data_frontend.sh", {
     BASE_URL = "http://${module.backend_lb.address}"
     CDN_URL  = module.carshub_cdn.cdn_ip_address
   })
-  port_specification     = var.port_specification
-  request_path           = "/auth/signin"
-  health_check_name      = var.frontend_health_check
-  location               = var.location
-  mig_base_instance_name = var.base_instance_name
-  instance_template_name = var.frontend_template_name
-  mig_named_port_name    = var.frontend_named_port_name
-  mig_named_port_port    = var.named_port_frontend
-  mig_name               = var.frontend_mig_name
-  mig_target_size        = var.target_size
+  labels = {
+    environment = "production"
+    team        = "platform"
+  }
 }
 
+# module "carshub_frontend_instance" {
+#   source        = "../../../modules/compute"
+#   auto_delete   = var.ubuntu_auto_delete
+#   boot          = var.ubuntu_boot
+#   source_image  = var.ubuntu_source_os_image
+#   template_name = var.frontend_template_name
+#   machine_type  = var.ubuntu_machine_type
+#   network       = module.carshub_vpc.vpc_id
+#   subnetwork    = module.carshub_private_subnets.subnets[0].id
+#   startup_script = templatefile("${path.module}/../../scripts/user_data_frontend.sh", {
+#     BASE_URL = "http://${module.backend_lb.address}"
+#     CDN_URL  = module.carshub_cdn.cdn_ip_address
+#   })
+#   port_specification     = var.port_specification
+#   request_path           = "/auth/signin"
+#   health_check_name      = var.frontend_health_check
+#   location               = var.location
+#   mig_base_instance_name = var.base_instance_name
+#   instance_template_name = var.frontend_template_name
+#   mig_named_port_name    = var.frontend_named_port_name
+#   mig_named_port_port    = var.named_port_frontend
+#   mig_name               = var.frontend_mig_name
+#   mig_target_size        = var.target_size
+# }
+
 module "carshub_backend_instance" {
-  source             = "../../../modules/compute"
-  auto_delete        = var.ubuntu_auto_delete
-  boot               = var.ubuntu_boot
-  source_image       = var.ubuntu_source_os_image
-  template_name      = var.backend_template_name
-  machine_type       = var.ubuntu_machine_type
-  network            = module.carshub_vpc.vpc_id
-  subnetwork         = module.carshub_private_subnets.subnets[1].id
-  port_specification = var.port_specification
-  health_check_name  = var.backend_health_check
-  request_path       = "/"
+  source                 = "../../../modules/instance-template"
+  project_id             = data.google_project.project.project_id
+  region                 = var.location
+  name_prefix            = "producer-instance-template"
+  machine_type           = "e2-medium"
+  source_image           = "ubuntu-minimal-2604-resolute-amd64-v20260704"
+  boot_disk_size_gb      = 50
+  boot_disk_type         = "pd-balanced"
+  network                = module.carshub_vpc.vpc_id
+  subnetwork             = module.carshub_private_subnets.subnets[0].id
+  assign_public_ip       = false
+  network_tags           = ["producer-instance"]
+  create_service_account = true
+  service_account_roles = [
+    "roles/logging.logWriter",
+    "roles/monitoring.metricWriter",
+  ]
   startup_script = templatefile("${path.module}/../../scripts/user_data_backend.sh", {
     DB_PATH = module.carshub_db.db_ip_address
     CREDS   = module.carshub_sql_password_secret.secret_data
     UN      = module.carshub_sql_username_secret.secret_id
   })
-  location               = var.location
-  mig_base_instance_name = var.base_instance_name
-  instance_template_name = var.backend_template_name
-  mig_named_port_name    = var.backend_named_port_name
-  mig_named_port_port    = var.named_port_backend
-  mig_name               = var.backend_mig_name
-  mig_target_size        = var.target_size
+  labels = {
+    environment = "production"
+    team        = "platform"
+  }
+}
+
+# module "carshub_backend_instance" {
+#   source             = "../../../modules/compute"
+#   auto_delete        = var.ubuntu_auto_delete
+#   boot               = var.ubuntu_boot
+#   source_image       = var.ubuntu_source_os_image
+#   template_name      = var.backend_template_name
+#   machine_type       = var.ubuntu_machine_type
+#   network            = module.carshub_vpc.vpc_id
+#   subnetwork         = module.carshub_private_subnets.subnets[1].id
+#   port_specification = var.port_specification
+#   health_check_name  = var.backend_health_check
+#   request_path       = "/"
+#   startup_script = templatefile("${path.module}/../../scripts/user_data_backend.sh", {
+#     DB_PATH = module.carshub_db.db_ip_address
+#     CREDS   = module.carshub_sql_password_secret.secret_data
+#     UN      = module.carshub_sql_username_secret.secret_id
+#   })
+#   location               = var.location
+#   mig_base_instance_name = var.base_instance_name
+#   instance_template_name = var.backend_template_name
+#   mig_named_port_name    = var.backend_named_port_name
+#   mig_named_port_port    = var.named_port_backend
+#   mig_name               = var.backend_mig_name
+#   mig_target_size        = var.target_size
+# }
+
+# -----------------------------------------------------------------------------------------
+# Managed Instance Groups
+# -----------------------------------------------------------------------------------------
+module "carshub_frontend_mig" {
+  source            = "../../../modules/mig"
+  project_id        = var.project_id
+  name              = "carshub-frontend-mig"
+  region            = var.location
+  instance_template = module.carshub_frontend_instance.self_link_unique
+  named_ports = [
+    { name = "http", port = 80 }
+  ]
+  health_check = {
+    type         = "HTTP"
+    port         = 80
+    request_path = "/auth/signin"
+  }
+  autoscaling = {
+    min_replicas = 1
+    max_replicas = 5
+  }
+  labels = {
+    env = "dev"
+  }
+}
+
+module "carshub_backend_mig" {
+  source            = "../../../modules/mig"
+  project_id        = var.project_id
+  name              = "carshub-backend-mig"
+  region            = var.location
+  instance_template = module.carshub_backend_instance.self_link_unique
+  named_ports = [
+    { name = "http", port = 80 }
+  ]
+  health_check = {
+    type         = "HTTP"
+    port         = 80
+    request_path = "/"
+  }
+  autoscaling = {
+    min_replicas = 1
+    max_replicas = 5
+  }
+  labels = {
+    env = "dev"
+  }
 }
 
 # -----------------------------------------------------------------------------------------
