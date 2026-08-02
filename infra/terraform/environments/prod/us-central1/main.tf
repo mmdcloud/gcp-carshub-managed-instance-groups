@@ -537,60 +537,102 @@ module "carshub_backend_mig" {
 # -----------------------------------------------------------------------------------------
 # Load Balancers
 # -----------------------------------------------------------------------------------------
+# module "frontend_lb" {
+#   source                                  = "../../../modules/load-balancer"
+#   forwarding_port_range                   = "80"
+#   forwarding_rule_name                    = "carshub-frontend-global-forwarding-rule-${var.environment}"
+#   forwarding_scheme                       = "EXTERNAL"
+#   global_address_type                     = "EXTERNAL"
+#   url_map_name                            = "carshub-frontend-url-map-${var.environment}"
+#   global_address_name                     = "carshub-frontend-lb-global-address-${var.environment}"
+#   target_proxy_name                       = "carshub-frontend-target-proxy-${var.environment}"
+#   backend_service_name                    = "carshub-frontend-service-${var.environment}"
+#   backend_service_enable_cdn              = false
+#   backend_service_port_name               = "carshub-frontend-port-${var.environment}"
+#   backend_service_protocol                = "HTTP"
+#   backend_service_timeout_sec             = 10
+#   backend_service_load_balancing_scheme   = "EXTERNAL"
+#   backend_service_custom_request_headers  = ["X-Client-Geo-Location: {client_region_subdivision}, {client_city}"]
+#   backend_service_custom_response_headers = ["X-Cache-Hit: {cdn_cache_status}"]
+#   backend_service_health_checks           = [module.carshub_frontend_instance.health_check_id]
+#   # security_policy                         = module.cloud_armor.policy.id
+#   backend_service_backends = [
+#     {
+#       group           = "${module.carshub_frontend_instance.instance_group}"
+#       balancing_mode  = "UTILIZATION"
+#       capacity_scaler = 1.0
+#     }
+#   ]
+# }
+
 module "frontend_lb" {
-  source                                  = "../../../modules/load-balancer"
-  forwarding_port_range                   = "80"
-  forwarding_rule_name                    = "carshub-frontend-global-forwarding-rule-${var.environment}"
-  forwarding_scheme                       = "EXTERNAL"
-  global_address_type                     = "EXTERNAL"
-  url_map_name                            = "carshub-frontend-url-map-${var.environment}"
-  global_address_name                     = "carshub-frontend-lb-global-address-${var.environment}"
-  target_proxy_name                       = "carshub-frontend-target-proxy-${var.environment}"
-  backend_service_name                    = "carshub-frontend-service-${var.environment}"
-  backend_service_enable_cdn              = false
-  backend_service_port_name               = "carshub-frontend-port-${var.environment}"
-  backend_service_protocol                = "HTTP"
-  backend_service_timeout_sec             = 10
-  backend_service_load_balancing_scheme   = "EXTERNAL"
-  backend_service_custom_request_headers  = ["X-Client-Geo-Location: {client_region_subdivision}, {client_city}"]
-  backend_service_custom_response_headers = ["X-Cache-Hit: {cdn_cache_status}"]
-  backend_service_health_checks           = [module.carshub_frontend_instance.health_check_id]
-  # security_policy                         = module.cloud_armor.policy.id
-  backend_service_backends = [
-    {
-      group           = "${module.carshub_frontend_instance.instance_group}"
-      balancing_mode  = "UTILIZATION"
-      capacity_scaler = 1.0
+  source = "../../../modules/lb"
+  project_id = var.project_id
+  name       = "frotnend-lb"
+  backends = {
+    lb = {
+      is_default          = true
+      protocol            = "HTTP"
+      port_name           = "http"
+      health_check_id     = module.carshub_frontend_mig.health_check_id
+      manage_health_check = false
+      groups = [
+        { group = module.carshub_frontend_mig.instance_group_self_link }
+      ]
     }
-  ]
+  }
+  enable_cloud_armor   = false
+  enable_http_redirect = false
+  depends_on           = [module.carshub_frontend_mig]
 }
 
+# module "backend_lb" {
+#   source                                  = "../../../modules/load-balancer"
+#   forwarding_port_range                   = "80"
+#   forwarding_rule_name                    = "carshub-backend-global-forwarding-rule-${var.environment}"
+#   forwarding_scheme                       = "EXTERNAL"
+#   global_address_type                     = "EXTERNAL"
+#   url_map_name                            = "carshub-backend-url-map-${var.environment}"
+#   global_address_name                     = "carshub-backend-lb-global-address-${var.environment}"
+#   target_proxy_name                       = "carshub-backend-target-proxy-${var.environment}"
+#   backend_service_name                    = "carshub-backend-service-${var.environment}"
+#   backend_service_enable_cdn              = false
+#   backend_service_port_name               = "carshub-backend-port-${var.environment}"
+#   backend_service_protocol                = "HTTP"
+#   backend_service_timeout_sec             = 10
+#   backend_service_load_balancing_scheme   = "EXTERNAL"
+#   backend_service_custom_request_headers  = ["X-Client-Geo-Location: {client_region_subdivision}, {client_city}"]
+#   backend_service_custom_response_headers = ["X-Cache-Hit: {cdn_cache_status}"]
+#   backend_service_health_checks           = [module.carshub_backend_instance.health_check_id]
+#   # security_policy                         = module.cloud_armor.policy.id
+#   backend_service_backends = [
+#     {
+#       group           = "${module.carshub_backend_instance.instance_group}"
+#       balancing_mode  = "UTILIZATION"
+#       capacity_scaler = 1.0
+#     }
+#   ]
+# }
+
 module "backend_lb" {
-  source                                  = "../../../modules/load-balancer"
-  forwarding_port_range                   = "80"
-  forwarding_rule_name                    = "carshub-backend-global-forwarding-rule-${var.environment}"
-  forwarding_scheme                       = "EXTERNAL"
-  global_address_type                     = "EXTERNAL"
-  url_map_name                            = "carshub-backend-url-map-${var.environment}"
-  global_address_name                     = "carshub-backend-lb-global-address-${var.environment}"
-  target_proxy_name                       = "carshub-backend-target-proxy-${var.environment}"
-  backend_service_name                    = "carshub-backend-service-${var.environment}"
-  backend_service_enable_cdn              = false
-  backend_service_port_name               = "carshub-backend-port-${var.environment}"
-  backend_service_protocol                = "HTTP"
-  backend_service_timeout_sec             = 10
-  backend_service_load_balancing_scheme   = "EXTERNAL"
-  backend_service_custom_request_headers  = ["X-Client-Geo-Location: {client_region_subdivision}, {client_city}"]
-  backend_service_custom_response_headers = ["X-Cache-Hit: {cdn_cache_status}"]
-  backend_service_health_checks           = [module.carshub_backend_instance.health_check_id]
-  # security_policy                         = module.cloud_armor.policy.id
-  backend_service_backends = [
-    {
-      group           = "${module.carshub_backend_instance.instance_group}"
-      balancing_mode  = "UTILIZATION"
-      capacity_scaler = 1.0
+  source = "../../../modules/lb"
+  project_id = var.project_id
+  name       = "backend-lb"
+  backends = {
+    lb = {
+      is_default          = true
+      protocol            = "HTTP"
+      port_name           = "http"
+      health_check_id     = module.carshub_backend_mig.health_check_id
+      manage_health_check = false
+      groups = [
+        { group = module.carshub_backend_mig.instance_group_self_link }
+      ]
     }
-  ]
+  }
+  enable_cloud_armor   = false
+  enable_http_redirect = false
+  depends_on           = [module.carshub_backend_mig]
 }
 
 # -----------------------------------------------------------------------------------------
