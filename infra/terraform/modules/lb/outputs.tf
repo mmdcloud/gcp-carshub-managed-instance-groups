@@ -8,11 +8,6 @@ output "lb_ipv6_address" {
   value       = var.enable_ipv6 && var.create_static_ip ? google_compute_global_address.ipv6[0].address : null
 }
 
-output "url_map_id" {
-  description = "ID of the main (HTTPS) URL map."
-  value       = google_compute_url_map.this.id
-}
-
 output "backend_service_ids" {
   description = "Map of backend key to backend service ID."
   value       = { for k, v in google_compute_backend_service.this : k => v.id }
@@ -43,7 +38,7 @@ output "security_policy_id" {
 #   value       = google_compute_global_forwarding_rule.https.id
 # }
 
-output "http_forwarding_rule_id" {
-  description = "ID of the HTTP (80) redirect forwarding rule, if enabled."
-  value       = var.enable_http_redirect ? google_compute_global_forwarding_rule.http[0].id : null
-}
+# output "http_forwarding_rule_id" {
+#   description = "ID of the HTTP (80) redirect forwarding rule, if enabled."
+#   value       = var.enable_http_redirect ? google_compute_global_forwarding_rule.http[0].id : null
+# }

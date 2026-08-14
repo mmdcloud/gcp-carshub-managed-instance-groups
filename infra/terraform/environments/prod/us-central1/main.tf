@@ -44,6 +44,7 @@ module "carshub_vpc" {
   routing_mode                    = "REGIONAL"
   region                          = var.location
   subnets                         = []
+  fi
 }
 
 # -----------------------------------------------------------------------------------------
