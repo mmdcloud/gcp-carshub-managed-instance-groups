@@ -12,21 +12,36 @@ resource "google_compute_subnetwork" "subnets" {
   region                   = var.subnets[count.index].region
   network                  = google_compute_network.vpc.id
   private_ip_google_access = var.subnets[count.index].private_ip_google_access
-  purpose                  = var.subnets[count.index].purpose
+  purpose                  = var.subnets[count.index].purpose  
   role                     = var.subnets[count.index].role
 }
 
-# resource "google_compute_firewall" "firewall" {
-#   count   = length(var.firewall_data)
-#   name    = var.firewall_data[count.index].name
-#   network = google_compute_network.vpc.id
-#   dynamic "allow" {
-#     for_each = var.firewall_data[count.index].allow_list
-#     content {
-#       protocol = allow.value["protocol"]
-#       ports    = allow.value["ports"]
-#     }
-#   }
+resource "google_compute_firewall" "this" {
+  for_each = { for fw in var.firewall_data : fw.name => fw }
 
-#   source_ranges = var.firewall_data[count.index].source_ranges
-# }
+  name        = each.value.name
+  network     = google_compute_network.this.id
+  description = try(each.value.description, null)
+  priority    = try(each.value.priority, 1000)
+
+  source_ranges      = try(each.value.source_ranges, null)
+  source_tags        = try(each.value.source_tags, null)
+  destination_ranges = try(each.value.destination_ranges, null)
+  target_tags        = try(each.value.target_tags, null)
+
+  dynamic "allow" {
+    for_each = try(each.value.allow_list, [])
+    content {
+      protocol = allow.value.protocol
+      ports    = try(allow.value.ports, null)
+    }
+  }
+
+  dynamic "deny" {
+    for_each = try(each.value.deny_list, [])
+    content {
+      protocol = deny.value.protocol
+      ports    = try(deny.value.ports, null)
+    }
+  }
+}

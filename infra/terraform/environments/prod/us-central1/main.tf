@@ -9,7 +9,13 @@ data "vault_generic_secret" "sql" {
 # Getting project information
 # -----------------------------------------------------------------------------------------
 data "google_project" "project" {}
+
 data "google_storage_project_service_account" "carshub_gcs_account" {}
+
+data "google_compute_image" "ubuntu_2404" {
+  family  = "ubuntu-2404-lts-amd64"
+  project = "ubuntu-os-cloud"
+}
 
 # -----------------------------------------------------------------------------------------
 # Enable APIS
@@ -43,166 +49,150 @@ module "carshub_vpc" {
   auto_create_subnetworks         = false
   routing_mode                    = "REGIONAL"
   region                          = var.location
-  subnets                         = []
-  fi
-}
-
-# -----------------------------------------------------------------------------------------
-# Firewall Rules
-# -----------------------------------------------------------------------------------------
-resource "google_compute_firewall" "allow_health_checks" {
-  name    = "carshub-allow-health-checks-${var.environment}"
-  network = module.carshub_vpc.vpc_name
-
-  allow {
-    protocol = "tcp"
-    ports    = ["80", "443", "8080"]
-  }
-
-  source_ranges = [
-    "130.211.0.0/22",
-    "35.191.0.0/16"
+  subnets = [
+    {
+      name                     = "carshub-frontend-mig-subnet"
+      region                   = var.location
+      purpose                  = "PRIVATE"
+      role                     = "ACTIVE"
+      private_ip_google_access = true
+      ip_cidr_range            = "10.1.20.0/24"
+    },
+    {
+      name                     = "carshub-backend-mig-subnet"
+      region                   = var.location
+      purpose                  = "PRIVATE"
+      role                     = "ACTIVE"
+      private_ip_google_access = true
+      ip_cidr_range            = "10.2.20.0/24"
+    }
   ]
-
-  target_tags = ["carshub-frontend", "carshub-backend"]
-
-  description = "Allow GCP load balancer health checks to frontend and backend MIGs"
-  priority    = 1000
-}
-
-resource "google_compute_firewall" "allow_lb_to_frontend" {
-  name    = "carshub-allow-lb-to-frontend-${var.environment}"
-  network = module.carshub_vpc.vpc_name
-
-  allow {
-    protocol = "tcp"
-    ports    = ["80"]
-  }
-
-  source_ranges = [
-    "130.211.0.0/22",
-    "35.191.0.0/16"
+  firewall_data = [
+    {
+      name        = "carshub-allow-health-checks-${var.environment}"
+      description = "Allow GCP load balancer health checks to frontend and backend MIGs"
+      priority    = 1000
+      target_tags = ["carshub-frontend", "carshub-backend"]
+      source_ranges = [
+        "130.211.0.0/22",
+        "35.191.0.0/16"
+      ]
+      allow_list = [
+        {
+          protocol = "tcp"
+          ports    = ["80", "443", "8080"]
+        }
+      ]
+    },
+    {
+      name        = "carshub-allow-lb-to-frontend-${var.environment}"
+      description = "Allow GFE/LB traffic to frontend MIG"
+      priority    = 1000
+      target_tags = ["carshub-frontend"]
+      source_ranges = [
+        "130.211.0.0/22",
+        "35.191.0.0/16"
+      ]
+      allow_list = [
+        {
+          protocol = "tcp"
+          ports    = ["80"]
+        }
+      ]
+    },
+    {
+      name        = "carshub-allow-lb-to-backend-${var.environment}"
+      description = "Allow GFE/LB traffic to backend MIG"
+      priority    = 1000
+      target_tags = ["carshub-backend"]
+      source_ranges = [
+        "130.211.0.0/22",
+        "35.191.0.0/16"
+      ]
+      allow_list = [
+        {
+          protocol = "tcp"
+          ports    = ["80"]
+        }
+      ]
+    },
+    {
+      name        = "carshub-allow-frontend-to-backend-${var.environment}"
+      description = "Allow frontend instances to call backend API"
+      priority    = 1000
+      source_tags = ["carshub-frontend"]
+      target_tags = ["carshub-backend"]
+      allow_list = [
+        {
+          protocol = "tcp"
+          ports    = ["80"]
+        }
+      ]
+    },
+    {
+      name               = "carshub-allow-backend-to-sql-${var.environment}"
+      description        = "Allow backend MIG to reach Cloud SQL via private IP"
+      priority           = 1000
+      source_tags        = ["carshub-backend"]
+      destination_ranges = ["10.0.0.0/8"]
+      allow_list = [
+        {
+          protocol = "tcp"
+          ports    = ["3306"]
+        }
+      ]
+    },
+    {
+      name          = "carshub-allow-vpc-connector-to-backend-${var.environment}"
+      description   = "Allow Cloud Function (via VPC connector) to reach backend MIG"
+      priority      = 1000
+      target_tags   = ["carshub-backend"]
+      source_ranges = ["10.8.0.0/28"]
+      allow_list = [
+        {
+          protocol = "tcp"
+          ports    = ["80", "8080"]
+        }
+      ]
+    },
+    {
+      name               = "carshub-allow-vpc-connector-to-sql-${var.environment}"
+      description        = "Allow Cloud Function (via VPC connector) to reach Cloud SQL"
+      priority           = 1000
+      source_ranges      = ["10.8.0.0/28"]
+      destination_ranges = ["10.0.0.0/8"]
+      allow_list = [
+        {
+          protocol = "tcp"
+          ports    = ["3306"]
+        }
+      ]
+    },
+    {
+      name          = "carshub-allow-iap-ssh-${var.environment}"
+      description   = "Allow SSH via Identity-Aware Proxy tunnel"
+      priority      = 1000
+      source_ranges = ["35.235.240.0/20"]
+      target_tags   = ["carshub-frontend", "carshub-backend"]
+      allow_list = [
+        {
+          protocol = "tcp"
+          ports    = ["22"]
+        }
+      ]
+    },
+    {
+      name          = "carshub-deny-all-ingress-${var.environment}"
+      description   = "Explicit catch-all deny for undocumented ingress traffic"
+      priority      = 65534
+      source_ranges = ["0.0.0.0/0"]
+      deny_list = [
+        {
+          protocol = "all"
+        }
+      ]
+    }
   ]
-
-  target_tags = ["carshub-frontend"]
-
-  description = "Allow GFE/LB traffic to frontend MIG"
-  priority    = 1000
-}
-
-resource "google_compute_firewall" "allow_lb_to_backend" {
-  name    = "carshub-allow-lb-to-backend-${var.environment}"
-  network = module.carshub_vpc.vpc_name
-
-  allow {
-    protocol = "tcp"
-    ports    = ["80"]
-  }
-
-  source_ranges = [
-    "130.211.0.0/22",
-    "35.191.0.0/16"
-  ]
-
-  target_tags = ["carshub-backend"]
-
-  description = "Allow GFE/LB traffic to backend MIG"
-  priority    = 1000
-}
-
-resource "google_compute_firewall" "allow_frontend_to_backend" {
-  name    = "carshub-allow-frontend-to-backend-${var.environment}"
-  network = module.carshub_vpc.vpc_name
-
-  allow {
-    protocol = "tcp"
-    ports    = ["80"]
-  }
-
-  source_tags = ["carshub-frontend"]
-  target_tags = ["carshub-backend"]
-
-  description = "Allow frontend instances to call backend API"
-  priority    = 1000
-}
-
-resource "google_compute_firewall" "allow_backend_to_sql" {
-  name    = "carshub-allow-backend-to-sql-${var.environment}"
-  network = module.carshub_vpc.vpc_name
-
-  allow {
-    protocol = "tcp"
-    ports    = ["3306"]
-  }
-
-  source_tags = ["carshub-backend"]
-
-  destination_ranges = ["10.0.0.0/8"]
-
-  description = "Allow backend MIG to reach Cloud SQL via private IP"
-  priority    = 1000
-}
-
-resource "google_compute_firewall" "allow_vpc_connector_to_backend" {
-  name    = "carshub-allow-vpc-connector-to-backend-${var.environment}"
-  network = module.carshub_vpc.vpc_name
-
-  allow {
-    protocol = "tcp"
-    ports    = ["80", "8080"]
-  }
-
-  source_ranges = ["10.8.0.0/28"]
-  target_tags   = ["carshub-backend"]
-
-  description = "Allow Cloud Function (via VPC connector) to reach backend MIG"
-  priority    = 1000
-}
-
-resource "google_compute_firewall" "allow_vpc_connector_to_sql" {
-  name    = "carshub-allow-vpc-connector-to-sql-${var.environment}"
-  network = module.carshub_vpc.vpc_name
-
-  allow {
-    protocol = "tcp"
-    ports    = ["3306"]
-  }
-
-  source_ranges      = ["10.8.0.0/28"]
-  destination_ranges = ["10.0.0.0/8"]
-
-  description = "Allow Cloud Function (via VPC connector) to reach Cloud SQL"
-  priority    = 1000
-}
-
-resource "google_compute_firewall" "allow_iap_ssh" {
-  name    = "carshub-allow-iap-ssh-${var.environment}"
-  network = module.carshub_vpc.vpc_name
-
-  allow {
-    protocol = "tcp"
-    ports    = ["22"]
-  }
-
-  source_ranges = ["35.235.240.0/20"]
-  target_tags   = ["carshub-frontend", "carshub-backend"]
-
-  description = "Allow SSH via Identity-Aware Proxy tunnel"
-  priority    = 1000
-}
-
-resource "google_compute_firewall" "deny_all_ingress" {
-  name    = "carshub-deny-all-ingress-${var.environment}"
-  network = module.carshub_vpc.vpc_name
-
-  deny {
-    protocol = "all"
-  }
-
-  source_ranges = ["0.0.0.0/0"]
-
-  description = "Explicit catch-all deny for undocumented ingress traffic"
-  priority    = 65534
 }
 
 # -----------------------------------------------------------------------------------------
@@ -243,122 +233,6 @@ module "carshub_function_app_service_account" {
 }
 
 # -----------------------------------------------------------------------------------------
-# Cloud Armor WAF protection for Load Balancers
-# -----------------------------------------------------------------------------------------
-# module "cloud_armor" {
-#   source  = "GoogleCloudPlatform/cloud-armor/google"
-#   version = "~> 5.0"
-
-#   project_id  = data.google_project.project.project_id
-#   name        = "carshub-security-policy"
-#   description = "CarHub Cloud Armor security policy with WAF rules"
-
-#   default_rule_action = "allow"
-#   type                = "CLOUD_ARMOR"
-
-#   layer_7_ddos_defense_enable          = true
-#   layer_7_ddos_defense_rule_visibility = "STANDARD"
-#   user_ip_request_headers              = ["True-Client-IP"]
-
-#   security_rules = {
-#     "rate_limit_rule" = {
-#       action        = "rate_based_ban"
-#       priority      = 1
-#       description   = "Rate limiting rule"
-#       src_ip_ranges = ["*"]
-
-#       rate_limit_options = {
-#         conform_action = "allow"
-#         exceed_action  = "deny(429)"
-#         enforce_on_key = "IP"
-#         ban_duration_sec = 600
-
-#         # Correct field names for module v5.x
-#         rate_limit_http_request_count        = 100
-#         rate_limit_http_request_interval_sec = 60
-#         ban_http_request_count               = 1000
-#         ban_http_request_interval_sec        = 600
-#       }
-
-#       match = {
-#         versioned_expr = "SRC_IPS_V1"
-#         config = {
-#           src_ip_ranges = ["*"]
-#         }
-#       }
-#     }
-#   }
-
-#   # geo_blocking uses CEL expression — must live in custom_rules, not security_rules
-#   custom_rules = {
-#     "geo_blocking" = {
-#       action      = "deny(403)"
-#       priority    = 10
-#       description = "Block traffic from specific countries"
-#       expression  = "origin.region_code in ['CN', 'RU']"
-#     }
-#   }
-
-#   pre_configured_rules = {
-#     "xss-stable_level_2" = {
-#       action            = "deny(403)"
-#       priority          = 2
-#       target_rule_set   = "xss-v33-stable"
-#       sensitivity_level = 2
-#     }
-
-#     "sqli-stable_level_2" = {
-#       action            = "deny(403)"
-#       priority          = 3
-#       target_rule_set   = "sqli-v33-stable"
-#       sensitivity_level = 2
-#     }
-
-#     "lfi-stable_level_2" = {
-#       action            = "deny(403)"
-#       priority          = 4
-#       target_rule_set   = "lfi-v33-stable"
-#       sensitivity_level = 2
-#     }
-
-#     "rce-stable_level_2" = {
-#       action            = "deny(403)"
-#       priority          = 5
-#       target_rule_set   = "rce-v33-stable"
-#       sensitivity_level = 2
-#     }
-
-#     "rfi-stable_level_2" = {
-#       action            = "deny(403)"
-#       priority          = 6
-#       target_rule_set   = "rfi-v33-stable"
-#       sensitivity_level = 2
-#     }
-
-#     "scannerdetection-stable_level_2" = {
-#       action            = "deny(403)"
-#       priority          = 7
-#       target_rule_set   = "scannerdetection-v33-stable"
-#       sensitivity_level = 2
-#     }
-
-#     "protocolattack-stable_level_2" = {
-#       action            = "deny(403)"
-#       priority          = 8
-#       target_rule_set   = "protocolattack-v33-stable"
-#       sensitivity_level = 2
-#     }
-
-#     "sessionfixation-stable_level_2" = {
-#       action            = "deny(403)"
-#       priority          = 9
-#       target_rule_set   = "sessionfixation-v33-stable"
-#       sensitivity_level = 2
-#     }
-#   }
-# }
-
-# -----------------------------------------------------------------------------------------
 # SECURITY: SSL/TLS Configuration
 # -----------------------------------------------------------------------------------------
 resource "google_compute_managed_ssl_certificate" "carshub_frontend_ssl_cert" {
@@ -384,11 +258,11 @@ module "carshub_frontend_instance" {
   region                 = var.location
   name_prefix            = "producer-instance-template"
   machine_type           = "e2-medium"
-  source_image           = "ubuntu-minimal-2604-resolute-amd64-v20260704"
+  source_image           = data.google_compute_image.ubuntu_2404.self_link
   boot_disk_size_gb      = 50
   boot_disk_type         = "pd-balanced"
   network                = module.carshub_vpc.vpc_id
-  subnetwork             = module.carshub_private_subnets.subnets[0].id
+  subnetwork             = module.carshub_vpc.subnets[0].id
   assign_public_ip       = false
   network_tags           = ["producer-instance"]
   create_service_account = true
@@ -398,7 +272,7 @@ module "carshub_frontend_instance" {
   ]
   startup_script = templatefile("${path.module}/../../scripts/user_data_frontend.sh", {
     BASE_URL = "http://${module.backend_lb.address}"
-    CDN_URL  = module.carshub_cdn.cdn_ip_address
+    CDN_URL  = module.carshub_cdn.lb_ip_address
   })
   labels = {
     environment = "production"
@@ -437,11 +311,11 @@ module "carshub_backend_instance" {
   region                 = var.location
   name_prefix            = "producer-instance-template"
   machine_type           = "e2-medium"
-  source_image           = "ubuntu-minimal-2604-resolute-amd64-v20260704"
+  source_image           = data.google_compute_image.ubuntu_2404.self_link
   boot_disk_size_gb      = 50
   boot_disk_type         = "pd-balanced"
   network                = module.carshub_vpc.vpc_id
-  subnetwork             = module.carshub_private_subnets.subnets[0].id
+  subnetwork             = module.carshub_vpc.subnets[1].id
   assign_public_ip       = false
   network_tags           = ["producer-instance"]
   create_service_account = true
@@ -567,24 +441,34 @@ module "carshub_backend_mig" {
 # }
 
 module "frontend_lb" {
-  source = "../../../modules/lb"
-  project_id = var.project_id
-  name       = "frotnend-lb"
+  source                   = "../../../modules/lb"
+  project_id               = var.project_id
+  name                     = "carshub-frontend-lb"
+  load_balancer_type       = "EXTERNAL"
+  region                   = var.location
+  create_proxy_only_subnet = false
+
   backends = {
     lb = {
-      is_default          = true
-      protocol            = "HTTP"
-      port_name           = "http"
-      health_check_id     = module.carshub_frontend_mig.health_check_id
+      is_default        = true
+      protocol          = "HTTP"
+      port_name         = "http"
+      is_serverless_neg = false
+      health_check = {
+        request_path = "/"
+        port         = 80
+      }
       manage_health_check = false
       groups = [
         { group = module.carshub_frontend_mig.instance_group_self_link }
       ]
     }
   }
-  enable_cloud_armor   = false
-  enable_http_redirect = false
-  depends_on           = [module.carshub_frontend_mig]
+  enable_ssl              = false
+  enable_http             = true
+  managed_ssl_certificate = false
+  enable_cloud_armor      = false
+  depends_on              = [module.carshub_frontend_mig]
 }
 
 # module "backend_lb" {
@@ -616,24 +500,34 @@ module "frontend_lb" {
 # }
 
 module "backend_lb" {
-  source = "../../../modules/lb"
-  project_id = var.project_id
-  name       = "backend-lb"
+  source                   = "../../../modules/lb"
+  project_id               = var.project_id
+  name                     = "carshub-frontend-lb"
+  load_balancer_type       = "EXTERNAL"
+  region                   = var.location
+  create_proxy_only_subnet = false
+
   backends = {
     lb = {
-      is_default          = true
-      protocol            = "HTTP"
-      port_name           = "http"
-      health_check_id     = module.carshub_backend_mig.health_check_id
+      is_default        = true
+      protocol          = "HTTP"
+      port_name         = "http"
+      is_serverless_neg = false
+      health_check = {
+        request_path = "/"
+        port         = 80
+      }
       manage_health_check = false
       groups = [
         { group = module.carshub_backend_mig.instance_group_self_link }
       ]
     }
   }
-  enable_cloud_armor   = false
-  enable_http_redirect = false
-  depends_on           = [module.carshub_backend_mig]
+  enable_ssl              = false
+  enable_http             = true
+  managed_ssl_certificate = false
+  enable_cloud_armor      = false
+  depends_on              = [module.carshub_backend_mig]
 }
 
 # -----------------------------------------------------------------------------------------
@@ -809,18 +703,22 @@ module "carshub_db" {
 # CDN Configuration
 # -----------------------------------------------------------------------------------------
 module "carshub_cdn" {
-  source                = "../../../modules/cdn"
-  bucket_name           = module.carshub_media_bucket.bucket_name
-  enable_cdn            = true
-  description           = "Content delivery network for media files"
-  name                  = "carshub-media-cdn-${var.environment}"
-  forwarding_port_range = "80"
-  forwarding_rule_name  = "carshub-cdn-global-forwarding-rule-${var.environment}"
-  forwarding_scheme     = "EXTERNAL"
-  global_address_type   = "EXTERNAL"
-  url_map_name          = "carshub-cdn-compute-url-map-${var.environment}"
-  global_address_name   = "carshub-cdn-lb-global-address-${var.environment}"
-  target_proxy_name     = "carshub-cdn-target-proxy-${var.environment}"
+  source     = "../../../modules/lb"
+  project_id = var.project_id
+  name       = "carshub-media-cdn-${var.environment}"
+
+  backend_buckets = {
+    website = {
+      is_default  = true
+      bucket_name = module.carshub_media_bucket.bucket_name
+    }
+  }
+
+  enable_ssl              = false
+  enable_http             = true
+  managed_ssl_certificate = false
+  enable_cloud_armor      = false
+  depends_on              = [module.carshub_media_bucket]
 }
 
 # -----------------------------------------------------------------------------------------
