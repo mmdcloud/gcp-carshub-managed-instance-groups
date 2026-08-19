@@ -16,11 +16,11 @@ resource "google_compute_subnetwork" "subnets" {
   role                     = var.subnets[count.index].role
 }
 
-resource "google_compute_firewall" "this" {
+resource "google_compute_firewall" "firewall" {
   for_each = { for fw in var.firewall_data : fw.name => fw }
 
   name        = each.value.name
-  network     = google_compute_network.this.id
+  network     = google_compute_network.vpc.id
   description = try(each.value.description, null)
   priority    = try(each.value.priority, 1000)
 

@@ -1,7 +1,7 @@
 output "frontend_url" {
-  value = module.frontend_lb.address
+  value = module.frontend_lb.lb_ip_address
 }
 
 output "backend_url" {
-  value = module.backend_lb.address
+  value = module.backend_lb.lb_ip_address
 }

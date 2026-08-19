@@ -51,7 +51,7 @@ module "carshub_vpc" {
   region                          = var.location
   subnets = [
     {
-      name                     = "carshub-frontend-mig-subnet"
+      name                     = "carshub-frontend-mig-subnet-${var.environment}"
       region                   = var.location
       purpose                  = "PRIVATE"
       role                     = "ACTIVE"
@@ -59,7 +59,7 @@ module "carshub_vpc" {
       ip_cidr_range            = "10.1.20.0/24"
     },
     {
-      name                     = "carshub-backend-mig-subnet"
+      name                     = "carshub-backend-mig-subnet-${var.environment}"
       region                   = var.location
       purpose                  = "PRIVATE"
       role                     = "ACTIVE"
@@ -256,7 +256,7 @@ module "carshub_frontend_instance" {
   source                 = "../../../modules/instance-template"
   project_id             = data.google_project.project.project_id
   region                 = var.location
-  name_prefix            = "producer-instance-template"
+  name_prefix            = "carshub-frontend-template-${var.environment}"
   machine_type           = "e2-medium"
   source_image           = data.google_compute_image.ubuntu_2404.self_link
   boot_disk_size_gb      = 50
@@ -264,52 +264,27 @@ module "carshub_frontend_instance" {
   network                = module.carshub_vpc.vpc_id
   subnetwork             = module.carshub_vpc.subnets[0].id
   assign_public_ip       = false
-  network_tags           = ["producer-instance"]
+  network_tags           = ["carshub-frontend"]
   create_service_account = true
   service_account_roles = [
     "roles/logging.logWriter",
     "roles/monitoring.metricWriter",
   ]
-  startup_script = templatefile("${path.module}/../../scripts/user_data_frontend.sh", {
-    BASE_URL = "http://${module.backend_lb.address}"
+  startup_script = templatefile("${path.module}/../../../scripts/user_data_frontend.sh", {
+    BASE_URL = "http://${module.backend_lb.lb_ip_address}"
     CDN_URL  = module.carshub_cdn.lb_ip_address
   })
   labels = {
-    environment = "production"
-    team        = "platform"
+    Name        = "carshub-frontend-template-${var.environment}"
+    Environment = var.environment
   }
 }
-
-# module "carshub_frontend_instance" {
-#   source        = "../../../modules/compute"
-#   auto_delete   = var.ubuntu_auto_delete
-#   boot          = var.ubuntu_boot
-#   source_image  = var.ubuntu_source_os_image
-#   template_name = var.frontend_template_name
-#   machine_type  = var.ubuntu_machine_type
-#   network       = module.carshub_vpc.vpc_id
-#   subnetwork    = module.carshub_private_subnets.subnets[0].id
-#   startup_script = templatefile("${path.module}/../../scripts/user_data_frontend.sh", {
-#     BASE_URL = "http://${module.backend_lb.address}"
-#     CDN_URL  = module.carshub_cdn.cdn_ip_address
-#   })
-#   port_specification     = var.port_specification
-#   request_path           = "/auth/signin"
-#   health_check_name      = var.frontend_health_check
-#   location               = var.location
-#   mig_base_instance_name = var.base_instance_name
-#   instance_template_name = var.frontend_template_name
-#   mig_named_port_name    = var.frontend_named_port_name
-#   mig_named_port_port    = var.named_port_frontend
-#   mig_name               = var.frontend_mig_name
-#   mig_target_size        = var.target_size
-# }
 
 module "carshub_backend_instance" {
   source                 = "../../../modules/instance-template"
   project_id             = data.google_project.project.project_id
   region                 = var.location
-  name_prefix            = "producer-instance-template"
+  name_prefix            = "carshub-backend-template-${var.environment}"
   machine_type           = "e2-medium"
   source_image           = data.google_compute_image.ubuntu_2404.self_link
   boot_disk_size_gb      = 50
@@ -317,48 +292,22 @@ module "carshub_backend_instance" {
   network                = module.carshub_vpc.vpc_id
   subnetwork             = module.carshub_vpc.subnets[1].id
   assign_public_ip       = false
-  network_tags           = ["producer-instance"]
+  network_tags           = ["carshub-backend"]
   create_service_account = true
   service_account_roles = [
     "roles/logging.logWriter",
     "roles/monitoring.metricWriter",
   ]
-  startup_script = templatefile("${path.module}/../../scripts/user_data_backend.sh", {
+  startup_script = templatefile("${path.module}/../../../scripts/user_data_backend.sh", {
     DB_PATH = module.carshub_db.db_ip_address
     CREDS   = module.carshub_sql_password_secret.secret_data
     UN      = module.carshub_sql_username_secret.secret_id
   })
   labels = {
-    environment = "production"
-    team        = "platform"
+    Name        = "carshub-backend-template-${var.environment}"
+    Environment = var.environment
   }
 }
-
-# module "carshub_backend_instance" {
-#   source             = "../../../modules/compute"
-#   auto_delete        = var.ubuntu_auto_delete
-#   boot               = var.ubuntu_boot
-#   source_image       = var.ubuntu_source_os_image
-#   template_name      = var.backend_template_name
-#   machine_type       = var.ubuntu_machine_type
-#   network            = module.carshub_vpc.vpc_id
-#   subnetwork         = module.carshub_private_subnets.subnets[1].id
-#   port_specification = var.port_specification
-#   health_check_name  = var.backend_health_check
-#   request_path       = "/"
-#   startup_script = templatefile("${path.module}/../../scripts/user_data_backend.sh", {
-#     DB_PATH = module.carshub_db.db_ip_address
-#     CREDS   = module.carshub_sql_password_secret.secret_data
-#     UN      = module.carshub_sql_username_secret.secret_id
-#   })
-#   location               = var.location
-#   mig_base_instance_name = var.base_instance_name
-#   instance_template_name = var.backend_template_name
-#   mig_named_port_name    = var.backend_named_port_name
-#   mig_named_port_port    = var.named_port_backend
-#   mig_name               = var.backend_mig_name
-#   mig_target_size        = var.target_size
-# }
 
 # -----------------------------------------------------------------------------------------
 # Managed Instance Groups
@@ -366,7 +315,7 @@ module "carshub_backend_instance" {
 module "carshub_frontend_mig" {
   source            = "../../../modules/mig"
   project_id        = var.project_id
-  name              = "carshub-frontend-mig"
+  name              = "carshub-frontend-mig-${var.environment}"
   region            = var.location
   instance_template = module.carshub_frontend_instance.self_link_unique
   named_ports = [
@@ -382,14 +331,15 @@ module "carshub_frontend_mig" {
     max_replicas = 5
   }
   labels = {
-    env = "dev"
+    Name        = "carshub-frontend-mig-${var.environment}"
+    Environment = var.environment
   }
 }
 
 module "carshub_backend_mig" {
   source            = "../../../modules/mig"
   project_id        = var.project_id
-  name              = "carshub-backend-mig"
+  name              = "carshub-backend-mig-${var.environment}"
   region            = var.location
   instance_template = module.carshub_backend_instance.self_link_unique
   named_ports = [
@@ -405,45 +355,18 @@ module "carshub_backend_mig" {
     max_replicas = 5
   }
   labels = {
-    env = "dev"
+    Name        = "carshub-backend-mig-${var.environment}"
+    Environment = var.environment
   }
 }
 
 # -----------------------------------------------------------------------------------------
 # Load Balancers
 # -----------------------------------------------------------------------------------------
-# module "frontend_lb" {
-#   source                                  = "../../../modules/load-balancer"
-#   forwarding_port_range                   = "80"
-#   forwarding_rule_name                    = "carshub-frontend-global-forwarding-rule-${var.environment}"
-#   forwarding_scheme                       = "EXTERNAL"
-#   global_address_type                     = "EXTERNAL"
-#   url_map_name                            = "carshub-frontend-url-map-${var.environment}"
-#   global_address_name                     = "carshub-frontend-lb-global-address-${var.environment}"
-#   target_proxy_name                       = "carshub-frontend-target-proxy-${var.environment}"
-#   backend_service_name                    = "carshub-frontend-service-${var.environment}"
-#   backend_service_enable_cdn              = false
-#   backend_service_port_name               = "carshub-frontend-port-${var.environment}"
-#   backend_service_protocol                = "HTTP"
-#   backend_service_timeout_sec             = 10
-#   backend_service_load_balancing_scheme   = "EXTERNAL"
-#   backend_service_custom_request_headers  = ["X-Client-Geo-Location: {client_region_subdivision}, {client_city}"]
-#   backend_service_custom_response_headers = ["X-Cache-Hit: {cdn_cache_status}"]
-#   backend_service_health_checks           = [module.carshub_frontend_instance.health_check_id]
-#   # security_policy                         = module.cloud_armor.policy.id
-#   backend_service_backends = [
-#     {
-#       group           = "${module.carshub_frontend_instance.instance_group}"
-#       balancing_mode  = "UTILIZATION"
-#       capacity_scaler = 1.0
-#     }
-#   ]
-# }
-
 module "frontend_lb" {
   source                   = "../../../modules/lb"
   project_id               = var.project_id
-  name                     = "carshub-frontend-lb"
+  name                     = "carshub-frontend-lb-{var.environment}"
   load_balancer_type       = "EXTERNAL"
   region                   = var.location
   create_proxy_only_subnet = false
@@ -455,7 +378,7 @@ module "frontend_lb" {
       port_name         = "http"
       is_serverless_neg = false
       health_check = {
-        request_path = "/"
+        request_path = "/auth/signin"
         port         = 80
       }
       manage_health_check = false
@@ -468,41 +391,17 @@ module "frontend_lb" {
   enable_http             = true
   managed_ssl_certificate = false
   enable_cloud_armor      = false
-  depends_on              = [module.carshub_frontend_mig]
+  labels = {
+    Name        = "carshub-frontend-lb-{var.environment}"
+    Environment = var.environment
+  }
+  depends_on = [module.carshub_frontend_mig]
 }
-
-# module "backend_lb" {
-#   source                                  = "../../../modules/load-balancer"
-#   forwarding_port_range                   = "80"
-#   forwarding_rule_name                    = "carshub-backend-global-forwarding-rule-${var.environment}"
-#   forwarding_scheme                       = "EXTERNAL"
-#   global_address_type                     = "EXTERNAL"
-#   url_map_name                            = "carshub-backend-url-map-${var.environment}"
-#   global_address_name                     = "carshub-backend-lb-global-address-${var.environment}"
-#   target_proxy_name                       = "carshub-backend-target-proxy-${var.environment}"
-#   backend_service_name                    = "carshub-backend-service-${var.environment}"
-#   backend_service_enable_cdn              = false
-#   backend_service_port_name               = "carshub-backend-port-${var.environment}"
-#   backend_service_protocol                = "HTTP"
-#   backend_service_timeout_sec             = 10
-#   backend_service_load_balancing_scheme   = "EXTERNAL"
-#   backend_service_custom_request_headers  = ["X-Client-Geo-Location: {client_region_subdivision}, {client_city}"]
-#   backend_service_custom_response_headers = ["X-Cache-Hit: {cdn_cache_status}"]
-#   backend_service_health_checks           = [module.carshub_backend_instance.health_check_id]
-#   # security_policy                         = module.cloud_armor.policy.id
-#   backend_service_backends = [
-#     {
-#       group           = "${module.carshub_backend_instance.instance_group}"
-#       balancing_mode  = "UTILIZATION"
-#       capacity_scaler = 1.0
-#     }
-#   ]
-# }
 
 module "backend_lb" {
   source                   = "../../../modules/lb"
   project_id               = var.project_id
-  name                     = "carshub-frontend-lb"
+  name                     = "carshub-backend-lb-{var.environment}"
   load_balancer_type       = "EXTERNAL"
   region                   = var.location
   create_proxy_only_subnet = false
@@ -527,7 +426,11 @@ module "backend_lb" {
   enable_http             = true
   managed_ssl_certificate = false
   enable_cloud_armor      = false
-  depends_on              = [module.carshub_backend_mig]
+  labels = {
+    Name        = "carshub-backend-lb-{var.environment}"
+    Environment = var.environment
+  }
+  depends_on = [module.carshub_backend_mig]
 }
 
 # -----------------------------------------------------------------------------------------
@@ -539,7 +442,7 @@ module "carshub_media_bucket" {
   name     = "carshub-media-${var.environment}"
   cors = [
     {
-      origin          = ["http://${module.carshub_frontend_service_lb.ip_address}"]
+      origin          = ["*"]
       max_age_seconds = 3600
       method          = ["GET", "POST", "PUT", "DELETE"]
       response_header = ["*"]
@@ -783,7 +686,7 @@ module "frontend_uptime_check" {
   http_request_method = "GET"
   http_validate_ssl   = false
   resource_type       = "uptime_url"
-  resource_host       = module.frontend_lb.address
+  resource_host       = module.frontend_lb.lb_ip_address
   checker_type        = "STATIC_IP_CHECKERS"
 }
 
@@ -797,7 +700,7 @@ module "backend_uptime_check" {
   http_request_method = "GET"
   http_validate_ssl   = false
   resource_type       = "uptime_url"
-  resource_host       = module.backend_lb.address
+  resource_host       = module.backend_lb.lb_ip_address
   checker_type        = "STATIC_IP_CHECKERS"
 }
 
@@ -1083,8 +986,7 @@ module "high_latency_alert" {
   display_name = "High Response Time Alert"
   combiner     = "OR"
   notification_channels = [
-    google_monitoring_notification_channel.email_alerts.id,
-    google_monitoring_notification_channel.slack_alerts.id
+    google_monitoring_notification_channel.email_alerts.id
   ]
   conditions = [
     {
@@ -1111,8 +1013,6 @@ module "service_unavailable_alert" {
   combiner     = "OR"
   notification_channels = [
     google_monitoring_notification_channel.email_alerts.id,
-    google_monitoring_notification_channel.slack_alerts.id,
-    google_monitoring_notification_channel.pagerduty_critical.id
   ]
   conditions = [
     {
@@ -1222,8 +1122,7 @@ module "traffic_spike_alert" {
   display_name = "Unusual Traffic Spike Detected"
   combiner     = "OR"
   notification_channels = [
-    google_monitoring_notification_channel.email_alerts.id,
-    google_monitoring_notification_channel.slack_alerts.id
+    google_monitoring_notification_channel.email_alerts.id
   ]
   conditions = [
     {

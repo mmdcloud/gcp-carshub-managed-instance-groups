@@ -25,15 +25,17 @@ variable "auto_close" {
 
 variable "conditions" {
   type = list(object({
-    display_name    = string
-    filter          = string
-    duration        = string
-    comparison      = string
-    threshold_value = number
-    aggregations = object({
-      alignment_period   = string
-      per_series_aligner = string
+    display_name = string
+    condition_threshold = object({
+      filter          = string
+      duration        = string
+      comparison      = string
+      threshold_value = number
+      aggregations = optional(object({
+        alignment_period     = string
+        per_series_aligner   = string
+        cross_series_reducer = optional(string)
+      }))
     })
   }))
-  default = []
 }
