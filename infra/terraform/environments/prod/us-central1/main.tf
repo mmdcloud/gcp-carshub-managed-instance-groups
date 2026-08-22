@@ -256,7 +256,7 @@ module "carshub_frontend_instance" {
   source                 = "../../../modules/instance-template"
   project_id             = data.google_project.project.project_id
   region                 = var.location
-  name_prefix            = "carshub-frontend-template-${var.environment}"
+  name_prefix            = "frontend-template-${var.environment}"
   machine_type           = "e2-medium"
   source_image           = data.google_compute_image.ubuntu_2404.self_link
   boot_disk_size_gb      = 50
@@ -275,7 +275,7 @@ module "carshub_frontend_instance" {
     CDN_URL  = module.carshub_cdn.lb_ip_address
   })
   labels = {
-    Name        = "carshub-frontend-template-${var.environment}"
+    Name        = "frontend-template-${var.environment}"
     Environment = var.environment
   }
 }
@@ -284,7 +284,7 @@ module "carshub_backend_instance" {
   source                 = "../../../modules/instance-template"
   project_id             = data.google_project.project.project_id
   region                 = var.location
-  name_prefix            = "carshub-backend-template-${var.environment}"
+  name_prefix            = "backend-template-${var.environment}"
   machine_type           = "e2-medium"
   source_image           = data.google_compute_image.ubuntu_2404.self_link
   boot_disk_size_gb      = 50
@@ -304,7 +304,7 @@ module "carshub_backend_instance" {
     UN      = module.carshub_sql_username_secret.secret_id
   })
   labels = {
-    Name        = "carshub-backend-template-${var.environment}"
+    Name        = "backend-template-${var.environment}"
     Environment = var.environment
   }
 }
@@ -381,7 +381,7 @@ module "frontend_lb" {
         request_path = "/auth/signin"
         port         = 80
       }
-      manage_health_check = false
+      manage_health_check = true
       groups = [
         { group = module.carshub_frontend_mig.instance_group_self_link }
       ]
@@ -416,7 +416,7 @@ module "backend_lb" {
         request_path = "/"
         port         = 80
       }
-      manage_health_check = false
+      manage_health_check = true
       groups = [
         { group = module.carshub_backend_mig.instance_group_self_link }
       ]
@@ -955,7 +955,7 @@ module "high_error_rate_alert" {
       condition_threshold = {
         filter          = "resource.type=\"http_load_balancer\" AND httpRequest.status>=500"
         duration        = "300s"
-        comparison      = "COMPARISON_GREATER_THAN"
+        comparison      = "COMPARISON_GT"
         threshold_value = 10
       }
     }
@@ -973,7 +973,7 @@ module "database_connection_alert" {
       condition_threshold = {
         filter          = "resource.type=\"cloudsql_database\" AND severity=\"ERROR\""
         duration        = "300s"
-        comparison      = "COMPARISON_GREATER_THAN"
+        comparison      = "COMPARISON_GT"
         threshold_value = 5
       }
     }
@@ -994,7 +994,7 @@ module "high_latency_alert" {
       condition_threshold = {
         filter          = "metric.type=\"logging.googleapis.com/user/http_response_time\" resource.type=\"http_load_balancer\""
         duration        = "300s"
-        comparison      = "COMPARISON_GREATER_THAN"
+        comparison      = "COMPARISON_GT"
         threshold_value = 2000
         aggregations = {
           alignment_period     = "60s"
@@ -1020,7 +1020,7 @@ module "service_unavailable_alert" {
       condition_threshold = {
         filter          = "metric.type=\"monitoring.googleapis.com/uptime_check/check_passed\" resource.type=\"uptime_url\""
         duration        = "180s"
-        comparison      = "COMPARISON_LESS_THAN"
+        comparison      = "COMPARISON_LT"
         threshold_value = 1
       }
     }
@@ -1039,7 +1039,7 @@ module "database_cpu_alert" {
       condition_threshold = {
         filter          = "metric.type=\"cloudsql.googleapis.com/database/cpu/utilization\" resource.type=\"cloudsql_database\""
         duration        = "300s"
-        comparison      = "COMPARISON_GREATER_THAN"
+        comparison      = "COMPARISON_GT"
         threshold_value = 0.80
         aggregations = {
           alignment_period   = "60s"
@@ -1062,7 +1062,7 @@ module "database_memory_alert" {
       condition_threshold = {
         filter          = "metric.type=\"cloudsql.googleapis.com/database/memory/utilization\" resource.type=\"cloudsql_database\""
         duration        = "300s"
-        comparison      = "COMPARISON_GREATER_THAN"
+        comparison      = "COMPARISON_GT"
         threshold_value = 0.85
         aggregations = {
           alignment_period   = "60s"
@@ -1085,7 +1085,7 @@ module "function_failure_alert" {
       condition_threshold = {
         filter          = "metric.type=\"cloudfunctions.googleapis.com/function/execution_count\" resource.type=\"cloud_function\" metric.label.status!=\"ok\""
         duration        = "300s"
-        comparison      = "COMPARISON_GREATER_THAN"
+        comparison      = "COMPARISON_GT"
         threshold_value = 5
         aggregations = {
           alignment_period     = "60s"
@@ -1109,7 +1109,7 @@ module "disk_space_alert" {
       condition_threshold = {
         filter          = "metric.type=\"compute.googleapis.com/instance/disk/utilization\" resource.type=\"gce_instance\""
         duration        = "300s"
-        comparison      = "COMPARISON_GREATER_THAN"
+        comparison      = "COMPARISON_GT"
         threshold_value = 0.85
       }
     }
@@ -1130,7 +1130,7 @@ module "traffic_spike_alert" {
       condition_threshold = {
         filter          = "metric.type=\"logging.googleapis.com/user/http_request_rate\" resource.type=\"http_load_balancer\""
         duration        = "120s"
-        comparison      = "COMPARISON_GREATER_THAN"
+        comparison      = "COMPARISON_GT"
         threshold_value = 1000
         aggregations = {
           alignment_period   = "60s"
@@ -1153,7 +1153,7 @@ module "ssl_cert_expiry_alert" {
       condition_threshold = {
         filter          = "metric.type=\"loadbalancing.googleapis.com/https/certificate/expiration_time\" resource.type=\"ssl_certificate\""
         duration        = "3600s"
-        comparison      = "COMPARISON_LESS_THAN"
+        comparison      = "COMPARISON_LT"
         threshold_value = 2592000 # 30 days in seconds
       }
     }
