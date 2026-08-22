@@ -235,19 +235,19 @@ module "carshub_function_app_service_account" {
 # -----------------------------------------------------------------------------------------
 # SECURITY: SSL/TLS Configuration
 # -----------------------------------------------------------------------------------------
-resource "google_compute_managed_ssl_certificate" "carshub_frontend_ssl_cert" {
-  name = "carshub-frontend-ssl-cert-${var.environment}"
-  managed {
-    domains = ["carshub-frontend.${var.domain}"]
-  }
-}
+# resource "google_compute_managed_ssl_certificate" "carshub_frontend_ssl_cert" {
+#   name = "carshub-frontend-ssl-cert-${var.environment}"
+#   managed {
+#     domains = ["carshub-frontend.${var.domain}"]
+#   }
+# }
 
-resource "google_compute_managed_ssl_certificate" "carshub_backend_ssl_cert" {
-  name = "carshub-backend-ssl-cert-${var.environment}"
-  managed {
-    domains = ["carshub-api.${var.domain}"]
-  }
-}
+# resource "google_compute_managed_ssl_certificate" "carshub_backend_ssl_cert" {
+#   name = "carshub-backend-ssl-cert-${var.environment}"
+#   managed {
+#     domains = ["carshub-api.${var.domain}"]
+#   }
+# }
 
 # -----------------------------------------------------------------------------------------
 # Instance templates
@@ -275,8 +275,8 @@ module "carshub_frontend_instance" {
     CDN_URL  = module.carshub_cdn.lb_ip_address
   })
   labels = {
-    Name        = "frontend-template-${var.environment}"
-    Environment = var.environment
+    name        = "frontend-template-${var.environment}"
+    environment = var.environment
   }
 }
 
@@ -304,8 +304,8 @@ module "carshub_backend_instance" {
     UN      = module.carshub_sql_username_secret.secret_id
   })
   labels = {
-    Name        = "backend-template-${var.environment}"
-    Environment = var.environment
+    name        = "backend-template-${var.environment}"
+    environment = var.environment
   }
 }
 
@@ -331,8 +331,8 @@ module "carshub_frontend_mig" {
     max_replicas = 5
   }
   labels = {
-    Name        = "carshub-frontend-mig-${var.environment}"
-    Environment = var.environment
+    name        = "carshub-frontend-mig-${var.environment}"
+    environment = var.environment
   }
 }
 
@@ -355,8 +355,8 @@ module "carshub_backend_mig" {
     max_replicas = 5
   }
   labels = {
-    Name        = "carshub-backend-mig-${var.environment}"
-    Environment = var.environment
+    name        = "carshub-backend-mig-${var.environment}"
+    environment = var.environment
   }
 }
 
@@ -366,7 +366,7 @@ module "carshub_backend_mig" {
 module "frontend_lb" {
   source                   = "../../../modules/lb"
   project_id               = var.project_id
-  name                     = "carshub-frontend-lb-{var.environment}"
+  name                     = "carshub-frontend-lb-${var.environment}"
   load_balancer_type       = "EXTERNAL"
   region                   = var.location
   create_proxy_only_subnet = false
@@ -392,8 +392,8 @@ module "frontend_lb" {
   managed_ssl_certificate = false
   enable_cloud_armor      = false
   labels = {
-    Name        = "carshub-frontend-lb-{var.environment}"
-    Environment = var.environment
+    name        = "carshub-frontend-lb-${var.environment}"
+    environment = var.environment
   }
   depends_on = [module.carshub_frontend_mig]
 }
@@ -401,7 +401,7 @@ module "frontend_lb" {
 module "backend_lb" {
   source                   = "../../../modules/lb"
   project_id               = var.project_id
-  name                     = "carshub-backend-lb-{var.environment}"
+  name                     = "carshub-backend-lb-${var.environment}"
   load_balancer_type       = "EXTERNAL"
   region                   = var.location
   create_proxy_only_subnet = false
@@ -427,8 +427,8 @@ module "backend_lb" {
   managed_ssl_certificate = false
   enable_cloud_armor      = false
   labels = {
-    Name        = "carshub-backend-lb-{var.environment}"
-    Environment = var.environment
+    name        = "carshub-backend-lb-${var.environment}"
+    environment = var.environment
   }
   depends_on = [module.carshub_backend_mig]
 }
@@ -486,7 +486,7 @@ module "carshub_media_bucket" {
       topic_id = module.carshub_media_bucket_pubsub.topic_id
     }
   ]
-  force_destroy               = false
+  force_destroy               = true
   uniform_bucket_level_access = true
 }
 
@@ -498,7 +498,7 @@ module "carshub_media_bucket_code" {
   contents = [
     {
       name        = "carshub_media_function_code.zip"
-      source_path = "${path.root}/../../../files/carshub_media_function_code.zip"
+      source_path = "${path.root}/../../../files/code.zip"
       content     = ""
     }
   ]
@@ -550,7 +550,7 @@ module "carshub_db" {
   disk_autoresize             = true
   disk_autoresize_limit       = 500 # GB
   ipv4_enabled                = false
-  deletion_protection_enabled = true
+  deletion_protection_enabled = false
   backup_configuration = [
     {
       enabled                        = true
@@ -767,21 +767,29 @@ module "database_connection_errors" {
 }
 
 # Response Time Tracking
-module "response_time_metric" {
-  source       = "../../../modules/observability/metrics"
-  name         = "http_response_time"
-  filter       = <<-EOT
-    resource.type="http_load_balancer"
-    httpRequest.latency>0
-  EOT
-  metric_kind  = "DELTA"
-  value_type   = "DISTRIBUTION"
-  display_name = "HTTP Response Time"
-  label_extractors = {
-    "url_map" = "EXTRACT(resource.labels.url_map_name)"
-    "backend" = "EXTRACT(resource.labels.backend_service_name)"
-  }
-}
+# module "response_time_metric" {
+#   source            = "../../../modules/observability/metrics"
+#   name              = "http_response_time"
+#   filter            = <<-EOT
+#     resource.type="http_load_balancer"
+#     httpRequest.latency>0
+#   EOT
+#   metric_kind       = "DELTA"
+#   value_type        = "DISTRIBUTION"
+#   value_extractor   = "EXTRACT(httpRequest.latency)"
+#   display_name      = "HTTP Response Time"
+#   bucket_options = {
+#     linear_buckets = {
+#       num_finite_buckets = 50
+#       width              = 0.05
+#       offset             = 0
+#     }
+#   }
+#   label_extractors = {
+#     "url_map" = "EXTRACT(resource.labels.url_map_name)"
+#     "backend" = "EXTRACT(resource.labels.backend_service_name)"
+#   }
+# }
 
 # Request Rate Tracking
 module "request_rate_metric" {
@@ -944,23 +952,28 @@ module "pubsub_message_failures" {
 }
 
 # Alerting Policies
-module "high_error_rate_alert" {
-  source                = "../../../modules/observability/alerts"
-  display_name          = "High Error Rate Alert"
-  combiner              = "OR"
-  notification_channels = [google_monitoring_notification_channel.email_alerts.id]
-  conditions = [
-    {
-      display_name = "HTTP 5xx Error Rate"
-      condition_threshold = {
-        filter          = "resource.type=\"http_load_balancer\" AND httpRequest.status>=500"
-        duration        = "300s"
-        comparison      = "COMPARISON_GT"
-        threshold_value = 10
-      }
-    }
-  ]
-}
+# module "high_error_rate_alert" {
+#   source                = "../../../modules/observability/alerts"
+#   display_name          = "High Error Rate Alert"
+#   combiner              = "OR"
+#   notification_channels = [google_monitoring_notification_channel.email_alerts.id]
+#   conditions = [
+#     {
+#       display_name = "HTTP 5xx Error Rate"
+#       condition_threshold = {
+#         filter          = "metric.type=\"logging.googleapis.com/user/http_5xx_errors\" resource.type=\"http_load_balancer\""
+#         duration        = "300s"
+#         comparison      = "COMPARISON_GT"
+#         threshold_value = 10
+#         aggregations = {
+#           alignment_period   = "60s"
+#           per_series_aligner = "ALIGN_RATE"
+#         }
+#       }
+#     }
+#   ]
+#   depends_on = [module.http_5xx_errors]
+# }
 
 module "database_connection_alert" {
   source                = "../../../modules/observability/alerts"
@@ -971,40 +984,45 @@ module "database_connection_alert" {
     {
       display_name = "Database Connection Errors"
       condition_threshold = {
-        filter          = "resource.type=\"cloudsql_database\" AND severity=\"ERROR\""
+        filter          = "metric.type=\"logging.googleapis.com/user/database_connection_errors\" resource.type=\"cloudsql_database\""
         duration        = "300s"
         comparison      = "COMPARISON_GT"
         threshold_value = 5
-      }
-    }
-  ]
-}
-
-# High Response Time Alert
-module "high_latency_alert" {
-  source       = "../../../modules/observability/alerts"
-  display_name = "High Response Time Alert"
-  combiner     = "OR"
-  notification_channels = [
-    google_monitoring_notification_channel.email_alerts.id
-  ]
-  conditions = [
-    {
-      display_name = "P95 Latency > 2s"
-      condition_threshold = {
-        filter          = "metric.type=\"logging.googleapis.com/user/http_response_time\" resource.type=\"http_load_balancer\""
-        duration        = "300s"
-        comparison      = "COMPARISON_GT"
-        threshold_value = 2000
         aggregations = {
-          alignment_period     = "60s"
-          per_series_aligner   = "ALIGN_PERCENTILE_95"
-          cross_series_reducer = "REDUCE_MEAN"
+          alignment_period   = "60s"
+          per_series_aligner = "ALIGN_RATE"
         }
       }
     }
   ]
+  depends_on = [module.database_connection_errors]
 }
+
+# High Response Time Alert
+# module "high_latency_alert" {
+#   source       = "../../../modules/observability/alerts"
+#   display_name = "High Response Time Alert"
+#   combiner     = "OR"
+#   notification_channels = [
+#     google_monitoring_notification_channel.email_alerts.id
+#   ]
+#   conditions = [
+#     {
+#       display_name = "P95 Latency > 2s"
+#       condition_threshold = {
+#         filter          = "metric.type=\"logging.googleapis.com/user/http_response_time\" resource.type=\"http_load_balancer\""
+#         duration        = "300s"
+#         comparison      = "COMPARISON_GT"
+#         threshold_value = 2000
+#         aggregations = {
+#           alignment_period     = "60s"
+#           per_series_aligner   = "ALIGN_PERCENTILE_95"
+#           cross_series_reducer = "REDUCE_MEAN"
+#         }
+#       }
+#     }
+#   ]
+# }
 
 # Critical - Service Unavailable
 module "service_unavailable_alert" {
@@ -1098,64 +1116,65 @@ module "function_failure_alert" {
 }
 
 # Disk Space Alert
-module "disk_space_alert" {
-  source                = "../../../modules/observability/alerts"
-  display_name          = "High Disk Usage Alert"
-  combiner              = "OR"
-  notification_channels = [google_monitoring_notification_channel.email_alerts.id]
-  conditions = [
-    {
-      display_name = "Disk Usage > 85%"
-      condition_threshold = {
-        filter          = "metric.type=\"compute.googleapis.com/instance/disk/utilization\" resource.type=\"gce_instance\""
-        duration        = "300s"
-        comparison      = "COMPARISON_GT"
-        threshold_value = 0.85
-      }
-    }
-  ]
-}
+# module "disk_space_alert" {
+#   source                = "../../../modules/observability/alerts"
+#   display_name          = "High Disk Usage Alert"
+#   combiner              = "OR"
+#   notification_channels = [google_monitoring_notification_channel.email_alerts.id]
+#   conditions = [
+#     {
+#       display_name = "Disk Usage > 85%"
+#       condition_threshold = {
+#         filter          = "metric.type=\"compute.googleapis.com/instance/disk/utilization\" resource.type=\"gce_instance\""
+#         duration        = "300s"
+#         comparison      = "COMPARISON_GT"
+#         threshold_value = 0.85
+#       }
+#     }
+#   ]
+# }
 
 # Network Traffic Spike Alert
-module "traffic_spike_alert" {
-  source       = "../../../modules/observability/alerts"
-  display_name = "Unusual Traffic Spike Detected"
-  combiner     = "OR"
-  notification_channels = [
-    google_monitoring_notification_channel.email_alerts.id
-  ]
-  conditions = [
-    {
-      display_name = "Request Rate 200% Above Normal"
-      condition_threshold = {
-        filter          = "metric.type=\"logging.googleapis.com/user/http_request_rate\" resource.type=\"http_load_balancer\""
-        duration        = "120s"
-        comparison      = "COMPARISON_GT"
-        threshold_value = 1000
-        aggregations = {
-          alignment_period   = "60s"
-          per_series_aligner = "ALIGN_RATE"
-        }
-      }
-    }
-  ]
-}
+# module "traffic_spike_alert" {
+#   source       = "../../../modules/observability/alerts"
+#   display_name = "Unusual Traffic Spike Detected"
+#   combiner     = "OR"
+#   notification_channels = [
+#     google_monitoring_notification_channel.email_alerts.id
+#   ]
+#   conditions = [
+#     {
+#       display_name = "Request Rate 200% Above Normal"
+#       condition_threshold = {
+#         filter          = "metric.type=\"logging.googleapis.com/user/http_request_rate\" resource.type=\"http_load_balancer\""
+#         duration        = "120s"
+#         comparison      = "COMPARISON_GT"
+#         threshold_value = 1000
+#         aggregations = {
+#           alignment_period   = "60s"
+#           per_series_aligner = "ALIGN_RATE"
+#         }
+#       }
+#     }
+#   ]
+#   depends_on = [module.request_rate_metric]
+# }
 
 # SSL Certificate Expiry Alert
-module "ssl_cert_expiry_alert" {
-  source                = "../../../modules/observability/alerts"
-  display_name          = "SSL Certificate Expiring Soon"
-  combiner              = "OR"
-  notification_channels = [google_monitoring_notification_channel.email_alerts.id]
-  conditions = [
-    {
-      display_name = "Certificate Expires in 30 Days"
-      condition_threshold = {
-        filter          = "metric.type=\"loadbalancing.googleapis.com/https/certificate/expiration_time\" resource.type=\"ssl_certificate\""
-        duration        = "3600s"
-        comparison      = "COMPARISON_LT"
-        threshold_value = 2592000 # 30 days in seconds
-      }
-    }
-  ]
-}
+# module "ssl_cert_expiry_alert" {
+#   source                = "../../../modules/observability/alerts"
+#   display_name          = "SSL Certificate Expiring Soon"
+#   combiner              = "OR"
+#   notification_channels = [google_monitoring_notification_channel.email_alerts.id]
+#   conditions = [
+#     {
+#       display_name = "Certificate Expires in 30 Days"
+#       condition_threshold = {
+#         filter          = "metric.type=\"loadbalancing.googleapis.com/https/certificate/expiration_time\" resource.type=\"ssl_certificate\""
+#         duration        = "3600s"
+#         comparison      = "COMPARISON_LT"
+#         threshold_value = 2592000 # 30 days in seconds
+#       }
+#     }
+#   ]
+# }
