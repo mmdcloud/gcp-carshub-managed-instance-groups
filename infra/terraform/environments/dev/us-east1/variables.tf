@@ -1,9 +1,5 @@
 variable "location" {
   type    = string
-  default = "us-central1"
-}
-variable "backup_location" {
-  type    = string
   default = "us-east1"
 }
 variable "project_id" {
@@ -125,4 +121,19 @@ variable "public_subnets" {
 variable "private_subnets" {
   type    = list(string)
   default = ["10.0.4.0/24", "10.0.5.0/24", "10.0.6.0/24"]
+}
+
+variable "domain" {
+  type        = string
+  description = "Domain name"
+}
+
+variable "notification_channel_email" {
+  type        = string
+  description = "Email notification channel for alerts"
+}
+
+variable "environment" {
+  type        = string
+  description = "Environment name"
 }

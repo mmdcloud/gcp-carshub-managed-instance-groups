@@ -2,10 +2,6 @@ variable "location" {
   type    = string
   default = "us-central1"
 }
-variable "backup_location" {
-  type    = string
-  default = "us-east1"
-}
 variable "project_id" {
   type    = string
   default = "encoded-alpha-457108-e8"
