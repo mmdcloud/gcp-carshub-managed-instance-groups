@@ -44,7 +44,7 @@ resource "google_compute_instance_template" "this" {
   project     = var.project_id
   name        = "${var.name_prefix}-${random_id.suffix.hex}"
   description = var.description
-  
+
   machine_type     = var.machine_type
   min_cpu_platform = var.min_cpu_platform
   region           = var.region
@@ -65,6 +65,40 @@ resource "google_compute_instance_template" "this" {
       content {
         kms_key_self_link = var.boot_disk_kms_key_self_link
       }
+    }
+  }
+
+  dynamic "guest_accelerator" {
+    for_each = var.guest_accelerator
+    content {
+      count = guest_accelerator.value.count
+      type  = guest_accelerator.value.type
+    }
+  }
+
+  instance_description       = var.instance_description
+  key_revocation_action_type = var.key_revocation_action_type
+  resource_policies          = var.resource_policies
+  resource_manager_tags      = var.resource_manager_tags
+
+  dynamic "reservation_affinity" {
+    for_each = var.reservation_affinity != null ? [var.reservation_affinity] : []
+    content {
+      type = reservation_affinity.value.type
+      dynamic "specific_reservation" {
+        for_each = reservation_affinity.value.specific_reservation != null ? [reservation_affinity.value.specific_reservation] : []
+        content {
+          key    = specific_reservation.value.key
+          values = specific_reservation.value.values
+        }
+      }
+    }
+  }
+
+  dynamic "network_performance_config" {
+    for_each = var.network_performance_config != null ? [var.network_performance_config] : []
+    content {
+      total_egress_bandwidth_tier = network_performance_config.value.total_egress_bandwidth_tier
     }
   }
 
@@ -92,7 +126,7 @@ resource "google_compute_instance_template" "this" {
       }
     }
   }
-  
+
   metadata = local.base_metadata
 
   service_account {

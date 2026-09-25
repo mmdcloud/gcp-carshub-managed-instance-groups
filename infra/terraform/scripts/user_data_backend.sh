@@ -14,7 +14,7 @@ npm install -g @nestjs/cli
 mkdir nodeapp
 # Checking out from Version Control
 git clone https://github.com/mmdcloud/carshub-gcp-managed-instance-groups
-cd carshub-gcp-managed-instance-groups/backend/api
+cd carshub-gcp-managed-instance-groups/src/backend/api
 cp -r . ../nodeapp/
 cd ../nodeapp/
 # Copying Nginx config

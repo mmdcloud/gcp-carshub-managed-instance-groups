@@ -76,10 +76,10 @@ variable "boot_disk_kms_key_self_link" {
 variable "additional_disks" {
   description = "Additional (non-boot) disks to attach."
   type = list(object({
-    device_name  = string
-    disk_size_gb = number
-    disk_type    = optional(string, "pd-balanced")
-    auto_delete  = optional(bool, true)
+    device_name          = string
+    disk_size_gb         = number
+    disk_type            = optional(string, "pd-balanced")
+    auto_delete          = optional(bool, true)
     disk_type_persistent = optional(bool, true) # true = persistent disk, false = local-ssd/scratch
   }))
   default = []
@@ -280,4 +280,50 @@ variable "labels" {
   description = "Labels applied to the instance template and resulting instances."
   type        = map(string)
   default     = {}
+}
+
+variable "guest_accelerator" {
+  description = "Additional (non-boot) disks to attach."
+  type = list(object({
+    count = number
+    type  = string
+  }))
+  default = []
+}
+
+variable "reservation_affinity" {
+  description = "Additional (non-boot) disks to attach."
+  type = object({
+    type = string
+    specific_reservation = object({
+      key    = string
+      values = list(string)
+    })
+  })
+  default = null
+}
+
+variable "network_performance_config" {
+  description = "Additional (non-boot) disks to attach."
+  type = object({
+    total_egress_bandwidth_tier = string
+  })
+  default = null
+}
+
+variable "instance_description" {
+  type    = string
+  default = ""
+}
+variable "key_revocation_action_type" {
+  type    = string
+  default = ""
+}
+variable "resource_policies" {
+  type    = list(string)
+  default = []
+}
+variable "resource_manager_tags" {
+  type    = map(string)
+  default = {}
 }

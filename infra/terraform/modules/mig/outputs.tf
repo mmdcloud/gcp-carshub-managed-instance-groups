@@ -20,5 +20,5 @@ output "health_check_self_link" {
 
 output "autoscaler_id" {
   description = "ID of the autoscaler, if enabled."
-  value       = var.enable_autoscaling ? google_compute_region_autoscaler.this[0].id : null
+  value       = var.autoscaling_enabled ? google_compute_region_autoscaler.autoscaler[0].id : null
 }

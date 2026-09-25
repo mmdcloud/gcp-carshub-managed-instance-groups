@@ -14,7 +14,7 @@ cd /home/ubuntu
 sudo mkdir nodeapp
 # Checking out from Version Control
 sudo git clone https://github.com/mmdcloud/carshub-gcp-managed-instance-groups
-cd carshub-gcp-managed-instance-groups/frontend
+cd carshub-gcp-managed-instance-groups/src/frontend
 sudo cp -r . /home/ubuntu/nodeapp/
 cd /home/ubuntu/nodeapp/
 # Setting up env variables
