@@ -48,7 +48,6 @@ module "carshub_vpc" {
   delete_default_routes_on_create = false
   auto_create_subnetworks         = false
   routing_mode                    = "REGIONAL"
-  region                          = var.location
   subnets = [
     {
       name                     = "carshub-frontend-mig-subnet-${var.environment}"
@@ -233,23 +232,6 @@ module "carshub_function_app_service_account" {
 }
 
 # -----------------------------------------------------------------------------------------
-# SECURITY: SSL/TLS Configuration
-# -----------------------------------------------------------------------------------------
-# resource "google_compute_managed_ssl_certificate" "carshub_frontend_ssl_cert" {
-#   name = "carshub-frontend-ssl-cert-${var.environment}"
-#   managed {
-#     domains = ["carshub-frontend.${var.domain}"]
-#   }
-# }
-
-# resource "google_compute_managed_ssl_certificate" "carshub_backend_ssl_cert" {
-#   name = "carshub-backend-ssl-cert-${var.environment}"
-#   managed {
-#     domains = ["carshub-api.${var.domain}"]
-#   }
-# }
-
-# -----------------------------------------------------------------------------------------
 # Instance templates
 # -----------------------------------------------------------------------------------------
 module "carshub_frontend_instance" {
@@ -262,7 +244,7 @@ module "carshub_frontend_instance" {
   boot_disk_size_gb      = 50
   boot_disk_type         = "pd-balanced"
   network                = module.carshub_vpc.vpc_id
-  subnetwork             = module.carshub_vpc.subnets[0].id
+  subnetwork             = module.carshub_vpc.subnets["carshub-frontend-mig-subnet-${var.environment}"].name
   assign_public_ip       = false
   network_tags           = ["carshub-frontend"]
   create_service_account = true
@@ -290,7 +272,7 @@ module "carshub_backend_instance" {
   boot_disk_size_gb      = 50
   boot_disk_type         = "pd-balanced"
   network                = module.carshub_vpc.vpc_id
-  subnetwork             = module.carshub_vpc.subnets[1].id
+  subnetwork             = module.carshub_vpc.subnets["carshub-backend-mig-subnet-${var.environment}"].name
   assign_public_ip       = false
   network_tags           = ["carshub-backend"]
   create_service_account = true
@@ -313,23 +295,28 @@ module "carshub_backend_instance" {
 # Managed Instance Groups
 # -----------------------------------------------------------------------------------------
 module "carshub_frontend_mig" {
-  source            = "../../../modules/mig"
-  project_id        = var.project_id
-  name              = "carshub-frontend-mig-${var.environment}"
-  region            = var.location
+  source     = "../../../modules/mig"
+  project_id = var.project_id
+  name       = "carshub-frontend-mig-${var.environment}"
+  region     = var.location
+
   instance_template = module.carshub_frontend_instance.self_link_unique
+
   named_ports = [
     { name = "http", port = 80 }
   ]
+
   health_check = {
     type         = "HTTP"
     port         = 80
     request_path = "/auth/signin"
   }
-  autoscaling = {
-    min_replicas = 1
-    max_replicas = 5
-  }
+
+  autoscaling_enabled = true
+  autoscaler_name     = "carshub-frontend-mig-autoscaler"
+  min_replicas        = 1
+  max_replicas        = 5
+
   labels = {
     name        = "carshub-frontend-mig-${var.environment}"
     environment = var.environment
@@ -337,23 +324,28 @@ module "carshub_frontend_mig" {
 }
 
 module "carshub_backend_mig" {
-  source            = "../../../modules/mig"
-  project_id        = var.project_id
-  name              = "carshub-backend-mig-${var.environment}"
-  region            = var.location
+  source     = "../../../modules/mig"
+  project_id = var.project_id
+  name       = "carshub-backend-mig-${var.environment}"
+  region     = var.location
+
   instance_template = module.carshub_backend_instance.self_link_unique
+
   named_ports = [
     { name = "http", port = 80 }
   ]
+
   health_check = {
     type         = "HTTP"
     port         = 80
     request_path = "/"
   }
-  autoscaling = {
-    min_replicas = 1
-    max_replicas = 5
-  }
+
+  autoscaling_enabled = true
+  autoscaler_name     = "carshub-backend-mig-autoscaler"
+  min_replicas        = 1
+  max_replicas        = 5
+
   labels = {
     name        = "carshub-backend-mig-${var.environment}"
     environment = var.environment
@@ -437,9 +429,10 @@ module "backend_lb" {
 # Google Cloud Storage Configuration
 # -----------------------------------------------------------------------------------------
 module "carshub_media_bucket" {
-  source   = "../../../modules/gcs"
-  location = var.location
-  name     = "carshub-media-${var.environment}"
+  source     = "../../../modules/gcs"
+  project_id = var.project_id
+  location   = var.location
+  name       = "carshub-media-${var.environment}"
   cors = [
     {
       origin          = ["*"]
@@ -483,18 +476,23 @@ module "carshub_media_bucket" {
   ]
   notifications = [
     {
-      topic_id = module.carshub_media_bucket_pubsub.topic_id
+      payload_format = "JSON_API_V1"
+      topic_id       = module.carshub_media_bucket_pubsub.topic_id
     }
   ]
   force_destroy               = true
   uniform_bucket_level_access = true
+  depends_on = [
+    google_pubsub_topic_iam_binding.binding
+  ]
 }
 
 module "carshub_media_bucket_code" {
-  source   = "../../../modules/gcs"
-  location = var.location
-  name     = "carshub-media-code-${var.environment}"
-  cors     = []
+  source     = "../../../modules/gcs"
+  project_id = var.project_id
+  location   = var.location
+  name       = "carshub-media-code-${var.environment}"
+  cors       = []
   contents = [
     {
       name        = "carshub_media_function_code.zip"
@@ -520,17 +518,21 @@ resource "google_storage_bucket_iam_binding" "storage_iam_binding" {
 # Secret Manager Configuration
 # -----------------------------------------------------------------------------------------
 module "carshub_sql_password_secret" {
-  source      = "../../../modules/secret-manager"
-  secret_data = tostring(data.vault_generic_secret.sql.data["password"])
-  secret_id   = "carshub-db-password-secret-${var.environment}"
-  depends_on  = [module.carshub_apis]
+  source              = "../../../modules/secret-manager"
+  is_regional         = false
+  deletion_protection = false
+  secret_data         = tostring(data.vault_generic_secret.sql.data["password"])
+  secret_id           = "carshub-db-password-secret-${var.environment}"
+  depends_on          = [module.carshub_apis]
 }
 
 module "carshub_sql_username_secret" {
-  source      = "../../../modules/secret-manager"
-  secret_data = tostring(data.vault_generic_secret.sql.data["username"])
-  secret_id   = "carshub-db-username-secret-${var.environment}"
-  depends_on  = [module.carshub_apis]
+  source              = "../../../modules/secret-manager"
+  is_regional         = false
+  deletion_protection = false
+  secret_data         = tostring(data.vault_generic_secret.sql.data["username"])
+  secret_id           = "carshub-db-username-secret-${var.environment}"
+  depends_on          = [module.carshub_apis]
 }
 
 # -----------------------------------------------------------------------------------------
@@ -550,7 +552,7 @@ module "carshub_db" {
   disk_autoresize             = true
   disk_autoresize_limit       = 500 # GB
   ipv4_enabled                = false
-  deletion_protection_enabled = false
+  deletion_protection_enabled = false # true for production
   backup_configuration = [
     {
       enabled                        = true
@@ -569,7 +571,7 @@ module "carshub_db" {
   database_flags = [
     {
       name  = "general_log"
-      value = "on"
+      value = "off"
     },
     {
       name  = "log_queries_not_using_indexes"
@@ -634,8 +636,8 @@ resource "google_pubsub_topic_iam_binding" "binding" {
 }
 
 module "carshub_media_bucket_pubsub" {
-  source = "../../../modules/pubsub"
-  topic  = "carshub-media-bucket-events-${var.environment}"
+  source     = "../../../modules/pubsub"
+  topic_name = "carshub-media-bucket-events-${var.environment}"
 }
 
 # -----------------------------------------------------------------------------------------
@@ -653,12 +655,12 @@ module "carshub_media_update_function" {
     runtime = "python312"
     storage_source = {
       bucket = module.carshub_media_bucket_code.bucket_name
-      object = module.carshub_media_bucket_code.object_name[0].name
+      object = module.carshub_media_bucket_code.bucket_objects["carshub_media_function_code.zip"].name
     }
-    build_env_variables = {
+    build_environment_variables = {
       DB_USER     = module.carshub_db.db_user
       DB_NAME     = module.carshub_db.db_name
-      SECRET_NAME = module.carshub_sql_password_secret.secret_name
+      SECRET_NAME = module.carshub_sql_password_secret.name
       DB_PATH     = module.carshub_db.db_ip_address
     }
   }
@@ -669,13 +671,14 @@ module "carshub_media_update_function" {
     available_memory                 = "256M"
     timeout_seconds                  = 60
     max_instance_request_concurrency = 80
-    available_cpu                    = "4"
+    available_cpu                    = "1" # <-- Changed from "4" to "1"
     ingress_settings                 = "ALLOW_INTERNAL_ONLY"
     all_traffic_on_latest_revision   = true
     service_account_email            = module.carshub_function_app_service_account.sa_email
     vpc_connector                    = module.carshub_vpc_connectors.vpc_connectors[0].id
     vpc_connector_egress_settings    = "ALL_TRAFFIC"
   }
+
   event_trigger = {
     service_account_email = module.carshub_function_app_service_account.sa_email
     event_type            = "google.cloud.pubsub.topic.v1.messagePublished"
