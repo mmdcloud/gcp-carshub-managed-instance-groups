@@ -15,8 +15,8 @@ mkdir nodeapp
 # Checking out from Version Control
 git clone https://github.com/mmdcloud/carshub-gcp-managed-instance-groups
 cd carshub-gcp-managed-instance-groups/src/backend/api
-cp -r . ../nodeapp/
-cd ../nodeapp/
+cp -r . ../../../../nodeapp/
+cd ../../../../nodeapp/
 # Copying Nginx config
 cp scripts/default /etc/nginx/sites-available/
 # Installing dependencies

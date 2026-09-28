@@ -211,6 +211,41 @@ module "carshub_vpc_connectors" {
   ]
 }
 
+# --------------------------------------------------------------------------
+# NAT Gateway and Cloud Router Configuration
+# --------------------------------------------------------------------------
+module "cloud_nat" {
+  source = "../../../modules/cloud-nat"
+
+  project_id = var.project_id
+  region     = var.location
+
+  create_router = true
+  router        = "carshub-router"
+
+  name    = "carshub-nat-router"
+  network = module.carshub_vpc.self_link
+  type    = "PUBLIC"
+
+  source_subnetwork_ip_ranges_to_nat = "LIST_OF_SUBNETWORKS"
+
+  subnetworks = [
+    {
+      name                     = module.carshub_vpc.subnets["carshub-frontend-mig-subnet-${var.environment}"].self_link
+      source_ip_ranges_to_nat  = ["ALL_IP_RANGES"]
+      secondary_ip_range_names = []
+    },
+    {
+      name                     = module.carshub_vpc.subnets["carshub-backend-mig-subnet-${var.environment}"].self_link
+      source_ip_ranges_to_nat  = ["ALL_IP_RANGES"]
+      secondary_ip_range_names = []
+    }
+  ]
+
+  log_config_enable = true
+  log_config_filter = "ALL"
+}
+
 # -----------------------------------------------------------------------------------------
 # Service Accounts
 # -----------------------------------------------------------------------------------------

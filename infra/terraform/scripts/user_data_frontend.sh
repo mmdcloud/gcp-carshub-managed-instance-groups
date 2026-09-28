@@ -1,5 +1,4 @@
 #!/bin/bash
-VM_HOSTNAME=$(hostname)
 sudo apt-get update -y
 sudo apt-get upgrade -y
 # Installing Nginx
@@ -10,14 +9,14 @@ sudo bash nodesource_setup.sh
 sudo apt install nodejs -y
 # Installing PM2
 sudo npm i -g pm2
-
-cd $HOME
+# /home/admin_mohitcloud_xyz
+# cd /home/admin_mohitcloud_xyz
 sudo mkdir nodeapp
 # Checking out from Version Control
 sudo git clone https://github.com/mmdcloud/carshub-gcp-managed-instance-groups
 cd carshub-gcp-managed-instance-groups/src/frontend
-sudo cp -r . $HOME/nodeapp/
-cd $HOME/nodeapp/
+sudo cp -r . ../../../nodeapp/
+cd ../../../nodeapp/
 # Setting up env variables
 sudo cat > .env <<EOL
 BASE_URL=${BASE_URL}
