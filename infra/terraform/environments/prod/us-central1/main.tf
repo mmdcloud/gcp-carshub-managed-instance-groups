@@ -318,7 +318,7 @@ module "carshub_backend_instance" {
   startup_script = templatefile("${path.module}/../../../scripts/user_data_backend.sh", {
     DB_PATH = module.carshub_db.db_ip_address
     CREDS   = module.carshub_sql_password_secret.secret_data
-    UN      = module.carshub_sql_username_secret.secret_id
+    UN      = module.carshub_sql_username_secret.secret_data
   })
   labels = {
     name        = "backend-template-${var.environment}"

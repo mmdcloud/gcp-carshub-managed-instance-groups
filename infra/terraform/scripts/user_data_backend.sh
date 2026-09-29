@@ -1,34 +1,35 @@
 #! /bin/bash
-apt-get update -y
-apt-get upgrade -y
+sudo apt-get update -y
+sudo apt-get upgrade -y
 # Installing Nginx
-apt-get install -y nginx
+sudo apt-get install -y nginx
 # Installing Node.js
 curl -sL https://deb.nodesource.com/setup_20.x -o nodesource_setup.sh
-bash nodesource_setup.sh
-apt install nodejs -y
+sudo bash nodesource_setup.sh
+sudo apt install nodejs -y
 # Installing PM2
-npm i -g pm2
+sudo npm i -g pm2
 # Installing Nest CLI
-npm install -g @nestjs/cli
-mkdir nodeapp
+sudo npm install -g @nestjs/cli
+cd /home/admin_mohitcloud_xyz
+sudo mkdir nodeapp
 # Checking out from Version Control
-git clone https://github.com/mmdcloud/carshub-gcp-managed-instance-groups
+sudo git clone https://github.com/mmdcloud/carshub-gcp-managed-instance-groups
 cd carshub-gcp-managed-instance-groups/src/backend/api
-cp -r . ../../../../nodeapp/
+sudo cp -r . ../../../../nodeapp/
 cd ../../../../nodeapp/
 # Copying Nginx config
-cp scripts/default /etc/nginx/sites-available/
+sudo cp scripts/default /etc/nginx/sites-available/
 # Installing dependencies
-npm i
+sudo npm i
 
-cat > .env <<EOL
+sudo cat > .env <<EOL
 DB_PATH=${DB_PATH}
 UN=${UN}
 CREDS=${CREDS}
 EOL
 # Building the project
-npm run build
+sudo npm run build
 # Starting PM2 app
-pm2 start dist/main.js
-service nginx restart
+sudo pm2 start dist/main.js
+sudo service nginx restart

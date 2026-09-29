@@ -10,13 +10,13 @@ sudo apt install nodejs -y
 # Installing PM2
 sudo npm i -g pm2
 # /home/admin_mohitcloud_xyz
-# cd /home/admin_mohitcloud_xyz
+cd /home/admin_mohitcloud_xyz
 sudo mkdir nodeapp
 # Checking out from Version Control
 sudo git clone https://github.com/mmdcloud/carshub-gcp-managed-instance-groups
 cd carshub-gcp-managed-instance-groups/src/frontend
-sudo cp -r . ../../../nodeapp/
-cd ../../../nodeapp/
+sudo cp -r . /home/admin_mohitcloud_xyz/nodeapp/
+cd /home/admin_mohitcloud_xyz/nodeapp/
 # Setting up env variables
 sudo cat > .env <<EOL
 BASE_URL=${BASE_URL}
@@ -30,5 +30,5 @@ sudo npm i
 # Building the project
 sudo npm run build
 # Starting PM2 app
-pm2 start ecosystem.config.js
+sudo pm2 start ecosystem.config.js
 sudo service nginx restart
