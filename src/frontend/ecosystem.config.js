@@ -3,7 +3,7 @@ module.exports = {
       name: "carshub-frontend",
       script: "npm",
       args: "start",
-      cwd: "/home/admin_mohitcloud_xyz/nodeapp",
+      cwd: "/nodeapp",
       watch: true,
       env: {
         NODE_ENV: "production",
