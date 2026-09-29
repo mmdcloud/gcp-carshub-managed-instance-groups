@@ -11,7 +11,6 @@ sudo apt install nodejs -y
 sudo npm i -g pm2
 # Installing Nest CLI
 sudo npm install -g @nestjs/cli
-cd /home/admin_mohitcloud_xyz
 sudo mkdir nodeapp
 # Checking out from Version Control
 sudo git clone https://github.com/mmdcloud/carshub-gcp-managed-instance-groups
@@ -21,13 +20,12 @@ cd ../../../../nodeapp/
 # Copying Nginx config
 sudo cp scripts/default /etc/nginx/sites-available/
 # Installing dependencies
-sudo npm i
-
 sudo cat > .env <<EOL
 DB_PATH=${DB_PATH}
 UN=${UN}
 CREDS=${CREDS}
 EOL
+sudo npm i
 # Building the project
 sudo npm run build
 # Starting PM2 app
